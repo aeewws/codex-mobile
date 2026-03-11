@@ -1,33 +1,63 @@
 # Codex Mobile
 
-Codex Mobile is an Android app that turns a local Termux-based Codex backend into a touch-friendly mobile experience.
+Codex Mobile is an Android app that turns a local Termux-based Codex backend into a touch-first mobile product, instead of a terminal-first workflow.
 
-## What it does
+Current UI is Chinese-first because the project is being developed on a real daily-driver phone. That is acceptable for open source. Localization can be improved later without changing the core architecture.
 
-- Starts and connects to a local `codex app-server`
-- Provides a mobile chat UI for Codex
-- Supports thread history, archived sessions, model switching, permission modes, and Fast mode
-- Keeps Termux as the backend runtime instead of the primary user interface
+中文说明见 [README.zh-CN.md](README.zh-CN.md)。
+
+## What It Is
+
+- Android app built with Jetpack Compose
+- Uses a local Codex backend running inside Termux
+- Keeps Termux as the runtime layer, not the primary user interface
+- Focuses on product-style chat, thread recovery, and mobile interaction
+
+## Current Features
+
+- Auto-start and reconnect to the local Codex backend
+- Mobile chat UI for real Codex threads
+- History, archive, restore, and delete flows
+- Model switching, reasoning level switching, permission modes, and Fast mode
+- Long-thread recovery improvements for unstable mobile/runtime conditions
 
 ## Architecture
 
-- Android UI: Jetpack Compose
-- Local backend: community Codex CLI running in Termux
-- Transport: local RPC over `ws://127.0.0.1:8765`
-- Runtime helpers: root-assisted backend start/stop and recovery logic
+- UI: Jetpack Compose
+- Backend runtime: community Codex CLI inside Termux
+- Bridge: local app-to-backend RPC
+- Runtime helpers: root-assisted backend lifecycle and recovery logic
 
-## Status
+## Project Status
 
-This project is an active prototype focused on making Codex usable on Android with a product-style interface instead of a terminal-first flow.
+This is an active prototype moving toward a desktop-grade Codex experience on Android.
 
-Current work is focused on:
+Current priorities:
 
 - bridge and state-machine stability
 - long-thread recovery
 - chat UX polish
 - image input support
 
-## Notes
+## Repository Scope
 
-- This repository intentionally does not include private runtime backups, auth files, or device-specific Termux data.
-- Mobile runtime snapshots and local debugging artifacts are kept outside the repository.
+This repository intentionally excludes private and device-specific runtime data.
+
+Not included here:
+
+- Termux auth files
+- local Codex session history
+- runtime backup archives
+- device-specific proxy or root configuration
+- private debugging artifacts
+
+## Open Source Notes
+
+This repository is meant to publish the app project itself, not a full exported phone environment.
+
+If you want to run or adapt this project, expect to set up your own:
+
+- Android build environment
+- Termux runtime
+- Codex backend package
+- local authentication and proxy settings

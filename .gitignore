@@ -15,3 +15,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+docs/CODEX_MOBILE_STATE_*.md
+docs/THREAD_CONTEXT_*.md
+docs/PHONE_TERMINAL_ENV_*.md
+docs/CODEX_MOBILE_BACKUP_*.md
+docs/OPEN_SOURCE_PREP_*.md
+phone-runtime-*/
+artifacts/
