@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Codex Mobile</string>
+    <string name="backend_channel_name">Codex 后端保活</string>
+    <string name="backend_channel_description">在活跃会话期间维持 Codex 本地服务稳定运行</string>
+    <string name="backend_notification_title">Codex 正在本机运行</string>
+    <string name="backend_notification_text">App 会在返回前台时自动重连并恢复线程视图</string>
+</resources>
