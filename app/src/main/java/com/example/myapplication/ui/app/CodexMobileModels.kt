@@ -100,6 +100,22 @@ enum class LocalMessageStatus {
     FAILED,
 }
 
+enum class AttachmentKind(
+    val label: String,
+) {
+    IMAGE("图片"),
+    DOCUMENT("文件"),
+}
+
+data class ChatAttachmentUi(
+    val kind: AttachmentKind,
+    val displayName: String,
+    val mimeType: String,
+    val previewPath: String? = null,
+    val backendPath: String? = null,
+    val extractedTextPath: String? = null,
+)
+
 sealed interface ChatItemUi {
     val id: String
     val sortKey: String
@@ -108,6 +124,7 @@ sealed interface ChatItemUi {
         override val id: String,
         override val sortKey: String,
         val text: String,
+        val attachments: List<ChatAttachmentUi> = emptyList(),
     ) : ChatItemUi
 
     data class LocalUser(
@@ -115,6 +132,7 @@ sealed interface ChatItemUi {
         override val sortKey: String,
         val text: String,
         val status: LocalMessageStatus,
+        val attachments: List<ChatAttachmentUi> = emptyList(),
     ) : ChatItemUi
 
     data class Agent(
@@ -164,6 +182,7 @@ data class ChatComposerState(
     val text: String = "",
     val sending: Boolean = false,
     val canInterrupt: Boolean = false,
+    val attachments: List<ChatAttachmentUi> = emptyList(),
 )
 
 data class ConnectionBanner(

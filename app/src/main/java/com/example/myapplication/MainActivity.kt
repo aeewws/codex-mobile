@@ -9,12 +9,14 @@ import com.example.myapplication.runtime.ProjectRootOption
 import com.example.myapplication.ui.app.CodexMobileApp
 import com.example.myapplication.ui.app.CodexMobileViewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<CodexMobileViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        PDFBoxResourceLoader.init(applicationContext)
         enableEdgeToEdge()
 
         setContent {

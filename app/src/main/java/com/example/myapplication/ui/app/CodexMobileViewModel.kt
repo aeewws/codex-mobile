@@ -2,11 +2,17 @@ package com.example.myapplication.ui.app
 
 import android.app.Activity
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.runtime.CodexRuntimeController
 import com.example.myapplication.runtime.RootShell
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,10 +24,21 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.charset.Charset
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.zip.ZipFile
+
+private enum class DocumentExtractMode {
+    PDF,
+    DOCX,
+    XLSX,
+    TEXT,
+}
 
 class CodexMobileViewModel(
     application: Application,
@@ -37,6 +54,7 @@ class CodexMobileViewModel(
     private val archivedThreadIds = loadArchivedThreadIds().toMutableSet()
     private val deletedThreadIds = loadDeletedThreadIds().toMutableSet()
     private val customThreadTitles = loadCustomThreadTitles().toMutableMap()
+    private val persistedMessageAttachments = loadPersistedMessageAttachments().toMutableMap()
 
     private val _uiState = MutableStateFlow(loadInitialState())
     val uiState: StateFlow<CodexMobileUiState> = _uiState
@@ -106,15 +124,68 @@ class CodexMobileViewModel(
         }
     }
 
+    fun attachFiles(uris: List<Uri>) {
+        viewModelScope.launch {
+            runCatching {
+                setError("")
+                setStatus("正在准备附件…")
+                val existing = _uiState.value.composer.attachments
+                val kept = existing.take(MAX_ATTACHMENTS)
+                val prepared = mutableListOf<ChatAttachmentUi>()
+                uris.take(MAX_ATTACHMENTS - kept.size).forEach { uri ->
+                    prepared += prepareAttachment(uri)
+                }
+                _uiState.update { state ->
+                    state.copy(composer = state.composer.copy(attachments = (kept + prepared).take(MAX_ATTACHMENTS)))
+                }
+                clearStatus()
+            }.onFailure { error ->
+                setError(error.message ?: "添加附件失败")
+            }
+        }
+    }
+
+    fun attachCameraBitmap(bitmap: Bitmap) {
+        viewModelScope.launch {
+            runCatching {
+                setError("")
+                setStatus("正在准备照片…")
+                val existing = _uiState.value.composer.attachments
+                if (existing.size >= MAX_ATTACHMENTS) {
+                    error("当前最多添加 $MAX_ATTACHMENTS 个附件")
+                }
+                val attachment = prepareCameraAttachment(bitmap)
+                _uiState.update { state ->
+                    state.copy(composer = state.composer.copy(attachments = (state.composer.attachments + attachment).take(MAX_ATTACHMENTS)))
+                }
+                clearStatus()
+            }.onFailure { error ->
+                setError(error.message ?: "添加照片失败")
+            }
+        }
+    }
+
+    fun clearComposerAttachments(index: Int) {
+        val attachments = _uiState.value.composer.attachments
+        if (index !in attachments.indices) {
+            return
+        }
+        scheduleAttachmentDeletion(attachments[index])
+        _uiState.update { state ->
+            state.copy(composer = state.composer.copy(attachments = state.composer.attachments.filterIndexed { i, _ -> i != index }))
+        }
+    }
+
     fun sendPrompt() {
-        val prompt = _uiState.value.composer.text.trim()
-        if (prompt.isEmpty()) {
+        val draftText = _uiState.value.composer.text.trim()
+        val attachments = _uiState.value.composer.attachments
+        if (draftText.isEmpty() && attachments.isEmpty()) {
             return
         }
 
         viewModelScope.launch {
             runCatching {
-                startTurn(prompt)
+                startTurn(buildPreparedSubmission(draftText, attachments))
             }.onFailure { error ->
                 setError(error.message ?: "发送失败")
             }
@@ -127,7 +198,7 @@ class CodexMobileViewModel(
         viewModelScope.launch {
             runCatching {
                 startTurn(
-                    prompt = draft.text,
+                    prepared = rebuildPreparedSubmission(draft),
                     targetThreadId = draft.threadId,
                     localDraftId = draft.id,
                     clearDraft = false,
@@ -155,7 +226,7 @@ class CodexMobileViewModel(
                     clearStatus()
                     refreshComposerActivity()
                 } else {
-                    startTurn("继续上一段输出。")
+                    startTurn(buildPreparedSubmission("继续上一段输出。", emptyList()))
                 }
             }.onFailure { error ->
                 setError(error.message ?: "继续失败")
@@ -171,7 +242,7 @@ class CodexMobileViewModel(
                 if (lastText.isEmpty()) {
                     error("没有找到上一条用户消息")
                 }
-                startTurn(lastText)
+                startTurn(buildPreparedSubmission(lastText, emptyList()))
             }.onFailure { error ->
                 setError(error.message ?: "重试失败")
             }
@@ -361,6 +432,7 @@ class CodexMobileViewModel(
         viewModelScope.launch {
             runCatching {
                 val deletedFiles = physicallyDeleteThreadArtifacts(threadId)
+                deleteThreadAttachmentArtifacts(threadId)
                 deletedThreadIds += threadId
                 archivedThreadIds.remove(threadId)
                 customThreadTitles.remove(threadId)
@@ -437,7 +509,7 @@ class CodexMobileViewModel(
     }
 
     private suspend fun startTurn(
-        prompt: String,
+        prepared: PreparedSubmission,
         targetThreadId: String? = null,
         localDraftId: String? = null,
         clearDraft: Boolean = true,
@@ -449,12 +521,14 @@ class CodexMobileViewModel(
         if (attachedDraftId == null) {
             attachedDraftId = appendLocalDraft(
                 conversationKey,
-                prompt,
+                displayText = prepared.displayText,
+                transportText = prepared.transportText,
+                attachments = prepared.attachments,
             ).id
         }
         val pendingTurn = registerPendingTurn(
             localDraftId = attachedDraftId,
-            prompt = prompt,
+            prompt = prepared.transportText,
             conversationKey = conversationKey,
             clearDraft = clearDraft,
         )
@@ -464,8 +538,8 @@ class CodexMobileViewModel(
             val threadId = ensureThreadForChat(normalizedTargetThreadId)
             attachedDraftId?.let { moveLocalDraftToThread(it, threadId) }
             bindPendingTurnToThread(pendingTurn.requestId, threadId)
-            lastUserTextByThread[threadId] = prompt.trim()
-            val response = performTurnStartWithResumeFallback(threadId, prompt) as? JSONObject
+            lastUserTextByThread[threadId] = prepared.displayText.trim()
+            val response = performTurnStartWithResumeFallback(threadId, prepared) as? JSONObject
             markPendingTurnRunning(
                 requestId = pendingTurn.requestId,
                 threadId = threadId,
@@ -1007,9 +1081,9 @@ class CodexMobileViewModel(
         return threadId
     }
 
-    private suspend fun performTurnStartWithResumeFallback(threadId: String, prompt: String): Any? {
+    private suspend fun performTurnStartWithResumeFallback(threadId: String, prepared: PreparedSubmission): Any? {
         return try {
-            performTurnStart(threadId, prompt)
+            performTurnStart(threadId, prepared)
         } catch (error: Throwable) {
             if (!isMissingThreadError(error.message)) {
                 throw error
@@ -1017,16 +1091,16 @@ class CodexMobileViewModel(
             Log.d(TAG, "turn/start missing thread for $threadId, force resume and retry")
             resumedThreadIds.remove(threadId)
             ensureExistingThreadReadyForWrite(threadId, forceResume = true)
-            performTurnStart(threadId, prompt)
+            performTurnStart(threadId, prepared)
         }
     }
 
-    private suspend fun performTurnStart(threadId: String, prompt: String): Any? =
+    private suspend fun performTurnStart(threadId: String, prepared: PreparedSubmission): Any? =
         rpcClient.request(
             method = "turn/start",
             params = JSONObject()
                 .put("threadId", threadId)
-                .put("input", buildTextInput(prompt))
+                .put("input", prepared.input)
                 .put("model", _uiState.value.selectedModel)
                 .put("modelReasoningEffort", _uiState.value.selectedReasoning)
                 .put("approvalPolicy", _uiState.value.permissionMode.approvalPolicy)
@@ -1038,6 +1112,7 @@ class CodexMobileViewModel(
         )
 
     private fun showNewConversation(localConversationId: String = newLocalConversationId()) {
+        _uiState.value.composer.attachments.forEach(::scheduleAttachmentDeletion)
         activeThread = null
         resetTurnTracking()
         persistThreadSelection(
@@ -1054,6 +1129,7 @@ class CodexMobileViewModel(
                 activeThreadId = localConversationId,
                 activeThreadTitle = "新会话",
                 messages = messages,
+                composer = ChatComposerState(),
             )
         }
         setError("")
@@ -1177,6 +1253,7 @@ class CodexMobileViewModel(
                     sortKey = "zz-local-${draft.createdAt.toString().padStart(16, '0')}-$index",
                     text = draft.text,
                     status = draft.status,
+                    attachments = draft.attachments,
                 )
             }
         if (shouldShowGeneratingPlaceholder(thread = thread, conversationKey = conversationKey)) {
@@ -1204,7 +1281,7 @@ class CodexMobileViewModel(
         }
         if (hasPending) {
             return activePending.any { pending ->
-                val matchedTurn = findLatestTurnForPrompt(thread, pending.prompt)
+                val matchedTurn = findMatchedTurnForPending(thread, pending)
                 matchedTurn?.let(::turnHasVisibleAssistantOutput) != true
             }
         }
@@ -1223,9 +1300,7 @@ class CodexMobileViewModel(
         val pending = activePendingTurnsForConversation(conversationKey)
             .firstOrNull { it.localDraftId == draft.id }
             ?: return false
-        val threadUpdatedAtMillis = (thread.updatedAtEpochSeconds ?: 0L) * 1000L
-        return findLatestTurnForPrompt(thread, draft.text) != null &&
-            threadUpdatedAtMillis + THREAD_TIMESTAMP_SKEW_MS >= pending.createdAt
+        return findLatestTurnForDraft(thread, draft) != null
     }
 
     private fun updateThreadStatus(threadId: String, status: String) {
@@ -1238,11 +1313,16 @@ class CodexMobileViewModel(
     }
 
     private fun upsertTurnItem(threadId: String, turnId: String, item: JSONObject) {
-        val parsedItem = parseItem(item)
-        if (parsedItem.type == "userMessage" && parsedItem.primaryText.isNotBlank()) {
-            lastUserTextByThread[threadId] = parsedItem.primaryText
-            reconcilePendingDraft(threadId, parsedItem.primaryText)?.let { draftId ->
-                onPendingDraftConfirmed(threadId, draftId)
+        val parsedItem = parseItem(item, threadId = threadId)
+        if (parsedItem.type == "userMessage") {
+            if (parsedItem.primaryText.isNotBlank()) {
+                lastUserTextByThread[threadId] = parsedItem.primaryText
+            }
+            reconcilePendingDraft(threadId, parsedItem.primaryText, parsedItem.attachments)?.let { draft ->
+                if (draft.attachments.isNotEmpty()) {
+                    rememberMessageAttachments(threadId, parsedItem.id, draft.attachments)
+                }
+                onPendingDraftConfirmed(threadId, draft)
             }
         } else if (parsedItem.type in BACKEND_OUTPUT_TYPES) {
             markPendingTurnRunning(
@@ -1415,7 +1495,7 @@ class CodexMobileViewModel(
             val items = turnJson.optJSONArray("items") ?: JSONArray()
             for (itemIndex in 0 until items.length()) {
                 val itemJson = items.optJSONObject(itemIndex) ?: continue
-                val parsedItem = parseItem(itemJson)
+                val parsedItem = parseItem(itemJson, threadId = thread.id)
                 turn.upsert(parsedItem)
                 if (parsedItem.type == "userMessage" && parsedItem.primaryText.isNotBlank()) {
                     lastUserTextByThread[thread.id] = parsedItem.primaryText
@@ -1426,14 +1506,23 @@ class CodexMobileViewModel(
         return thread
     }
 
-    private fun parseItem(item: JSONObject): MutableItem {
+    private fun parseItem(item: JSONObject, threadId: String? = null): MutableItem {
         val type = item.optString("type").ifBlank { "unknown" }
         return when (type) {
-            "userMessage" -> MutableItem(
-                id = item.optString("id").ifBlank { "user-${System.nanoTime()}" },
-                type = type,
-                primaryText = extractText(item.optJSONArray("content")),
-            )
+            "userMessage" -> {
+                val itemId = item.optString("id").ifBlank { "user-${System.nanoTime()}" }
+                val rawText = extractText(item.optJSONArray("content"))
+                val attachments = findPersistedMessageAttachments(threadId, itemId)
+                    ?: parseAttachmentsFromUserContent(item.optJSONArray("content"))
+                    ?: parseDocumentAttachmentsFromText(rawText)
+                    ?: emptyList()
+                MutableItem(
+                    id = itemId,
+                    type = type,
+                    primaryText = normalizeUserDisplayText(rawText, attachments),
+                    attachments = attachments,
+                )
+            }
 
             "agentMessage" -> MutableItem(
                 id = item.optString("id").ifBlank { "agent-${System.nanoTime()}" },
@@ -1492,8 +1581,12 @@ class CodexMobileViewModel(
         for (index in 0 until array.length()) {
             when (val entry = array.opt(index)) {
                 is JSONObject -> {
-                    val text = entry.optString("text").ifBlank {
-                        entry.optString("content").ifBlank { entry.toString() }
+                    val entryType = entry.optString("type")
+                    val text = when {
+                        entryType.equals("text", ignoreCase = true) -> entry.optString("text")
+                        entry.has("text") -> entry.optString("text")
+                        entry.has("content") && entry.opt("content") is String -> entry.optString("content")
+                        else -> ""
                     }
                     if (text.isNotBlank()) {
                         pieces += text
@@ -1553,23 +1646,626 @@ class CodexMobileViewModel(
     }
 
     private fun buildTextInput(text: String): JSONArray =
-        JSONArray().put(
-            JSONObject()
-                .put("type", "text")
-                .put("text", text.trim())
-                .put("text_elements", JSONArray()),
+        JSONArray().put(buildTextInputBlock(text))
+
+    private fun buildTextInputBlock(text: String): JSONObject =
+        JSONObject()
+            .put("type", "text")
+            .put("text", text.trim())
+            .put("text_elements", JSONArray())
+
+    private fun buildPreparedSubmission(
+        displayText: String,
+        attachments: List<ChatAttachmentUi>,
+    ): PreparedSubmission {
+        val normalizedDisplayText = displayText.trim()
+        if (attachments.isEmpty()) {
+            return PreparedSubmission(
+                displayText = normalizedDisplayText,
+                transportText = normalizedDisplayText,
+                input = buildTextInput(normalizedDisplayText),
+                attachments = emptyList(),
+            )
+        }
+
+        val documentTexts = attachments
+            .filter { it.kind == AttachmentKind.DOCUMENT }
+            .map { attachment ->
+                buildDocumentTransportText(
+                    displayText = "",
+                    attachment = attachment,
+                    extractedText = readExtractedAttachmentText(attachment),
+                )
+            }
+        val hasImages = attachments.any { it.kind == AttachmentKind.IMAGE }
+        val transportText = buildString {
+            if (normalizedDisplayText.isNotBlank()) {
+                append(normalizedDisplayText)
+            } else if (hasImages) {
+                append(IMAGE_ONLY_PROMPT)
+            }
+            if (documentTexts.isNotEmpty()) {
+                if (isNotBlank()) append("\n\n")
+                append(documentTexts.joinToString("\n\n"))
+            }
+        }.trim()
+        val input = JSONArray()
+        if (transportText.isNotBlank()) {
+            input.put(buildTextInputBlock(transportText))
+        }
+        attachments.filter { it.kind == AttachmentKind.IMAGE }.forEach { attachment ->
+            input.put(
+                JSONObject()
+                    .put("type", "localImage")
+                    .put("path", attachment.backendPath ?: error("图片附件还没准备好")),
+            )
+        }
+        return PreparedSubmission(
+            displayText = normalizedDisplayText,
+            transportText = transportText,
+            input = input,
+            attachments = attachments,
         )
+    }
+
+    private fun rebuildPreparedSubmission(draft: LocalDraftMessage): PreparedSubmission {
+        if (draft.attachments.isEmpty()) {
+            return PreparedSubmission(
+                displayText = draft.text,
+                transportText = draft.transportText,
+                input = buildTextInput(draft.transportText),
+                attachments = emptyList(),
+            )
+        }
+        val input = JSONArray()
+        if (draft.transportText.isNotBlank()) {
+            input.put(buildTextInputBlock(draft.transportText))
+        }
+        draft.attachments.filter { it.kind == AttachmentKind.IMAGE }.forEach { attachment ->
+            input.put(
+                JSONObject()
+                    .put("type", "localImage")
+                    .put("path", attachment.backendPath ?: error("图片附件缓存已失效")),
+            )
+        }
+        return PreparedSubmission(
+            displayText = draft.text,
+            transportText = draft.transportText,
+            input = input,
+            attachments = draft.attachments,
+        )
+    }
+
+    private suspend fun prepareAttachment(uri: Uri): ChatAttachmentUi {
+        val application = getApplication<Application>()
+        val resolver = application.contentResolver
+        val displayName = queryDisplayName(uri).ifBlank { "attachment" }
+        val mimeType = resolveMimeType(uri, displayName)
+        return when {
+            mimeType.startsWith("image/", ignoreCase = true) -> prepareImageAttachment(uri, displayName, mimeType)
+            isPdfAttachment(mimeType, displayName) ->
+                prepareDocumentAttachment(uri, displayName, mimeType, DocumentExtractMode.PDF)
+            isDocxAttachment(mimeType, displayName) ->
+                prepareDocumentAttachment(uri, displayName, mimeType, DocumentExtractMode.DOCX)
+            isXlsxAttachment(mimeType, displayName) ->
+                prepareDocumentAttachment(uri, displayName, mimeType, DocumentExtractMode.XLSX)
+            isLegacyXlsAttachment(mimeType, displayName) ->
+                error("当前版本先支持新版 Excel（.xlsx），旧版 .xls 还没接入")
+            isTextAttachment(mimeType, displayName) ->
+                prepareDocumentAttachment(uri, displayName, mimeType, DocumentExtractMode.TEXT)
+            else -> error("当前版本暂不支持直接识别这种文件")
+        }
+    }
+
+    private suspend fun prepareImageAttachment(
+        uri: Uri,
+        displayName: String,
+        mimeType: String,
+    ): ChatAttachmentUi {
+        val resolver = getApplication<Application>().contentResolver
+        val bitmap = resolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input)
+        } ?: error("无法读取图片")
+        return storePreparedBitmap(bitmap, displayName, mimeType)
+    }
+
+    private suspend fun prepareCameraAttachment(bitmap: Bitmap): ChatAttachmentUi =
+        storePreparedBitmap(bitmap, "照片.jpg", "image/jpeg")
+
+    private suspend fun storePreparedBitmap(
+        bitmap: Bitmap,
+        displayName: String,
+        mimeType: String,
+    ): ChatAttachmentUi {
+        val scaled = scaleBitmap(bitmap)
+        if (scaled !== bitmap && !bitmap.isRecycled) {
+            bitmap.recycle()
+        }
+        val appFile = createAppAttachmentFile(displayName, "jpg")
+        FileOutputStream(appFile).use { output ->
+            check(scaled.compress(Bitmap.CompressFormat.JPEG, 88, output)) { "写入图片缓存失败" }
+        }
+        if (scaled !== bitmap && !scaled.isRecycled) {
+            scaled.recycle()
+        }
+        val backendPath = copyFileToBackendReadableLocation(appFile)
+        return ChatAttachmentUi(
+            kind = AttachmentKind.IMAGE,
+            displayName = displayName,
+            mimeType = mimeType,
+            previewPath = appFile.absolutePath,
+            backendPath = backendPath,
+        )
+    }
+
+    private suspend fun prepareDocumentAttachment(
+        uri: Uri,
+        displayName: String,
+        mimeType: String,
+        mode: DocumentExtractMode,
+    ): ChatAttachmentUi {
+        val resolver = getApplication<Application>().contentResolver
+        val extension = displayName.substringAfterLast('.', "bin").lowercase(Locale.ROOT)
+        val sourceFile = createAppAttachmentFile(displayName, extension)
+        resolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(sourceFile).use { output -> input.copyTo(output) }
+        } ?: error("无法读取文件")
+
+        val extractedText = runCatching {
+            when (mode) {
+                DocumentExtractMode.PDF -> extractPdfText(sourceFile)
+                DocumentExtractMode.DOCX -> extractDocxText(sourceFile)
+                DocumentExtractMode.XLSX -> extractXlsxText(sourceFile)
+                DocumentExtractMode.TEXT -> extractTextDocument(sourceFile)
+            }
+        }.getOrElse { throwable ->
+            throw IllegalStateException(documentParseErrorMessage(mode), throwable)
+        }.ifBlank { error("没有提取到可识别文本") }
+
+        val extractedFile = createAppAttachmentFile("${sourceFile.nameWithoutExtension}-extracted", "txt")
+        extractedFile.writeText(extractedText, Charsets.UTF_8)
+        return ChatAttachmentUi(
+            kind = AttachmentKind.DOCUMENT,
+            displayName = displayName,
+            mimeType = mimeType,
+            extractedTextPath = extractedFile.absolutePath,
+        )
+    }
+
+    private fun readExtractedAttachmentText(attachment: ChatAttachmentUi): String {
+        val path = attachment.extractedTextPath ?: error("文件附件缺少提取文本")
+        val file = File(path)
+        if (!file.exists()) {
+            error("附件内容缓存已失效")
+        }
+        return file.readText(Charsets.UTF_8)
+    }
+
+    private fun buildDocumentTransportText(
+        displayText: String,
+        attachment: ChatAttachmentUi,
+        extractedText: String,
+    ): String {
+        val metadata = JSONObject()
+            .put("name", attachment.displayName)
+            .put("mime", attachment.mimeType)
+        return buildString {
+            append(DOCUMENT_PREFIX)
+            append(metadata.toString())
+            append(DOCUMENT_SUFFIX)
+            append("\n\n")
+            append(displayText)
+            append(DOCUMENT_CONTENT_MARKER)
+            append(extractedText)
+        }.trim()
+    }
+
+    private fun queryDisplayName(uri: Uri): String =
+        runCatching {
+            getApplication<Application>().contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0 && cursor.moveToFirst()) {
+                    cursor.getString(index).orEmpty()
+                } else {
+                    ""
+                }
+            }.orEmpty()
+        }.getOrDefault("")
+
+    private fun resolveMimeType(uri: Uri, displayName: String): String {
+        val resolver = getApplication<Application>().contentResolver
+        val direct = resolver.getType(uri).orEmpty()
+        if (direct.isNotBlank()) {
+            return direct
+        }
+        return when (displayName.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
+            "txt", "log", "md", "json", "xml", "csv", "kt", "java", "py", "js", "ts", "tsx", "jsx", "sh" -> "text/plain"
+            "pdf" -> "application/pdf"
+            "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            "xls" -> "application/vnd.ms-excel"
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            else -> "application/octet-stream"
+        }
+    }
+
+    private fun isPdfAttachment(mimeType: String, displayName: String): Boolean =
+        mimeType.equals("application/pdf", ignoreCase = true) ||
+            displayName.endsWith(".pdf", ignoreCase = true)
+
+    private fun isTextAttachment(mimeType: String, displayName: String): Boolean {
+        if (mimeType.startsWith("text/", ignoreCase = true)) {
+            return true
+        }
+        return displayName.substringAfterLast('.', "").lowercase(Locale.ROOT) in setOf(
+            "txt", "log", "md", "json", "xml", "csv", "kt", "java", "py", "js", "ts", "tsx", "jsx", "sh",
+        )
+    }
+
+    private fun isDocxAttachment(mimeType: String, displayName: String): Boolean =
+        mimeType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ignoreCase = true) ||
+            displayName.endsWith(".docx", ignoreCase = true)
+
+    private fun isXlsxAttachment(mimeType: String, displayName: String): Boolean =
+        mimeType.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ignoreCase = true) ||
+            displayName.endsWith(".xlsx", ignoreCase = true)
+
+    private fun isLegacyXlsAttachment(mimeType: String, displayName: String): Boolean =
+        mimeType.equals("application/vnd.ms-excel", ignoreCase = true) ||
+            displayName.endsWith(".xls", ignoreCase = true)
+
+    private fun createAppAttachmentFile(displayName: String, extension: String): File {
+        val safeBase = sanitizeFileName(displayName.substringBeforeLast('.').ifBlank { "attachment" })
+        val ext = extension.trim('.').ifBlank { "bin" }
+        val dir = File(getApplication<Application>().cacheDir, APP_ATTACHMENT_DIR).apply { mkdirs() }
+        return File(dir, "${safeBase}-${System.currentTimeMillis()}.$ext")
+    }
+
+    private fun sanitizeFileName(value: String): String =
+        value.replace(Regex("[^A-Za-z0-9._-]"), "_").take(48).ifBlank { "attachment" }
+
+    private fun scaleBitmap(bitmap: Bitmap, maxEdge: Int = 2048): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val maxSide = maxOf(width, height)
+        if (maxSide <= maxEdge) {
+            return bitmap
+        }
+        val ratio = maxEdge.toFloat() / maxSide.toFloat()
+        return Bitmap.createScaledBitmap(
+            bitmap,
+            (width * ratio).toInt().coerceAtLeast(1),
+            (height * ratio).toInt().coerceAtLeast(1),
+            true,
+        )
+    }
+
+    private suspend fun copyFileToBackendReadableLocation(file: File): String {
+        val targetName = sanitizeFileName(file.nameWithoutExtension) + "." + file.extension.ifBlank { "bin" }
+        val targetPath = "$BACKEND_ATTACHMENT_DIR/$targetName"
+        val command = buildString {
+            append("mkdir -p ")
+            append(RootShell.shellQuote(BACKEND_ATTACHMENT_DIR))
+            append(" && cp ")
+            append(RootShell.shellQuote(file.absolutePath))
+            append(" ")
+            append(RootShell.shellQuote(targetPath))
+            append(" && chmod 644 ")
+            append(RootShell.shellQuote(targetPath))
+        }
+        val result = RootShell.run(command = command, timeoutMillis = 12_000L)
+        if (result.exitCode != 0) {
+            error(result.stderr.ifBlank { "复制附件到后端缓存失败" })
+        }
+        return targetPath
+    }
+
+    private fun extractTextDocument(file: File): String {
+        val bytes = file.readBytes()
+        val utf8 = bytes.toString(Charsets.UTF_8)
+        val text = if (utf8.contains('\uFFFD')) {
+            runCatching { bytes.toString(Charset.forName("GB18030")) }.getOrDefault(utf8)
+        } else {
+            utf8
+        }
+        return text.trim().take(MAX_DOCUMENT_CHARS)
+    }
+
+    private fun extractPdfText(file: File): String =
+        PDDocument.load(file).use { document ->
+            PDFTextStripper().getText(document)
+                .replace("\r\n", "\n")
+                .trim()
+                .take(MAX_DOCUMENT_CHARS)
+        }
+
+    private fun extractDocxText(file: File): String =
+        ZipFile(file).use { zip ->
+            val entry = zip.getEntry("word/document.xml") ?: error("无法读取 DOCX 正文")
+            zip.getInputStream(entry).bufferedReader(Charsets.UTF_8).use { reader ->
+                reader.readText()
+                    .replace(Regex("</w:p>"), "\n")
+                    .replace(Regex("<[^>]+>"), "")
+                    .let(::decodeXmlEntities)
+                    .replace(Regex("\n{2,}"), "\n\n")
+                    .trim()
+                    .take(MAX_DOCUMENT_CHARS)
+            }
+        }
+
+    private fun extractXlsxText(file: File): String =
+        ZipFile(file).use { zip ->
+            val sharedStrings = zip.getEntry("xl/sharedStrings.xml")
+                ?.let { parseSharedStrings(zip, it.name) }
+                .orEmpty()
+            val sheetEntries = zip.entries().asSequence()
+                .filter { !it.isDirectory && it.name.startsWith("xl/worksheets/") && it.name.endsWith(".xml") }
+                .sortedBy { it.name }
+                .toList()
+            if (sheetEntries.isEmpty()) {
+                error("无法读取 Excel 工作表")
+            }
+            buildString {
+                sheetEntries.forEachIndexed { index, entry ->
+                    val rows = extractXlsxSheetRows(zip, entry.name, sharedStrings)
+                    if (rows.isEmpty()) {
+                        return@forEachIndexed
+                    }
+                    if (isNotBlank()) append("\n\n")
+                    append("工作表 ")
+                    append(index + 1)
+                    append("\n")
+                    append(rows.joinToString("\n"))
+                }
+            }.trim().take(MAX_DOCUMENT_CHARS)
+        }
+
+    private fun parseSharedStrings(zip: ZipFile, entryName: String): List<String> {
+        val xml = zip.getInputStream(zip.getEntry(entryName)).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        return Regex("<si[^>]*>(.*?)</si>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+            .findAll(xml)
+            .map { match ->
+                Regex("<t[^>]*>(.*?)</t>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+                    .findAll(match.groupValues[1])
+                    .joinToString("") { decodeXmlEntities(it.groupValues[1]) }
+                    .trim()
+            }
+            .toList()
+    }
+
+    private fun extractXlsxSheetRows(
+        zip: ZipFile,
+        entryName: String,
+        sharedStrings: List<String>,
+    ): List<String> {
+        val xml = zip.getInputStream(zip.getEntry(entryName)).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        return Regex("<row[^>]*>(.*?)</row>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+            .findAll(xml)
+            .mapNotNull { match -> extractXlsxRowText(match.groupValues[1], sharedStrings).takeIf { it.isNotBlank() } }
+            .toList()
+    }
+
+    private fun extractXlsxRowText(
+        rowXml: String,
+        sharedStrings: List<String>,
+    ): String {
+        val values = Regex("<c([^>]*)>(.*?)</c>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+            .findAll(rowXml)
+            .mapNotNull { match ->
+                val attributes = match.groupValues[1]
+                val cellXml = match.groupValues[2]
+                val cellType = Regex("""\bt="([^"]+)"""").find(attributes)?.groupValues?.getOrNull(1).orEmpty()
+                when (cellType) {
+                    "s" -> Regex("<v>(.*?)</v>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+                        .find(cellXml)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.trim()
+                        ?.toIntOrNull()
+                        ?.let { sharedStrings.getOrNull(it).orEmpty().trim() }
+                    "inlineStr" -> Regex("<t[^>]*>(.*?)</t>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+                        .findAll(cellXml)
+                        .joinToString("") { decodeXmlEntities(it.groupValues[1]) }
+                        .trim()
+                    else -> Regex("<v>(.*?)</v>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+                        .find(cellXml)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.let(::decodeXmlEntities)
+                        ?.trim()
+                }?.takeIf { it.isNotBlank() }
+            }
+            .toList()
+        return values.joinToString(" | ")
+    }
+
+    private fun decodeXmlEntities(text: String): String =
+        text
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&apos;", "'")
+            .replace("&#10;", "\n")
+            .replace("&#13;", "\r")
+
+    private fun documentParseErrorMessage(mode: DocumentExtractMode): String =
+        when (mode) {
+            DocumentExtractMode.PDF -> "PDF 解析失败，请换一个 PDF 再试"
+            DocumentExtractMode.DOCX -> "Word 文档解析失败，请换一个 DOCX 再试"
+            DocumentExtractMode.XLSX -> "Excel 表格解析失败，请换一个 XLSX 再试"
+            DocumentExtractMode.TEXT -> "文件内容读取失败，请换一个文件再试"
+        }
+
+    private fun rememberMessageAttachments(
+        threadId: String,
+        itemId: String,
+        attachments: List<ChatAttachmentUi>,
+    ) {
+        if (threadId.isBlank() || itemId.isBlank() || attachments.isEmpty()) {
+            return
+        }
+        persistedMessageAttachments[itemId] = PersistedMessageAttachments(
+            itemId = itemId,
+            threadId = threadId,
+            attachments = attachments,
+        )
+        persistMessageAttachments()
+    }
+
+    private fun findPersistedMessageAttachments(
+        threadId: String?,
+        itemId: String,
+    ): List<ChatAttachmentUi>? {
+        val record = persistedMessageAttachments[itemId] ?: return null
+        if (!threadId.isNullOrBlank() && record.threadId != threadId) {
+            return null
+        }
+        return record.attachments
+    }
+
+    private fun parseAttachmentsFromUserContent(content: JSONArray?): List<ChatAttachmentUi>? {
+        if (content == null) {
+            return null
+        }
+        val items = mutableListOf<ChatAttachmentUi>()
+        for (index in 0 until content.length()) {
+            val entry = content.optJSONObject(index) ?: continue
+            val type = entry.optString("type")
+            if (type.equals("localImage", ignoreCase = true)) {
+                val path = entry.optString("path").ifBlank { continue }
+                items += ChatAttachmentUi(
+                    kind = AttachmentKind.IMAGE,
+                    displayName = File(path).name.ifBlank { "图片" },
+                    mimeType = resolveMimeTypeFromPath(path),
+                    previewPath = path,
+                    backendPath = path,
+                )
+            }
+        }
+        return items.ifEmpty { null }
+    }
+
+    private fun parseDocumentAttachmentsFromText(rawText: String): List<ChatAttachmentUi>? {
+        val matches = Regex(
+            "${Regex.escape(DOCUMENT_PREFIX)}(.*?)${Regex.escape(DOCUMENT_SUFFIX)}",
+            setOf(RegexOption.DOT_MATCHES_ALL),
+        ).findAll(rawText)
+        val attachments = matches.mapNotNull { match ->
+            val json = match.groupValues.getOrNull(1).orEmpty().trim()
+            runCatching { JSONArray(json) }.getOrNull()?.toAttachmentUiList()
+                ?: runCatching { JSONObject(json) }.getOrNull()?.let { payload ->
+                    val name = payload.optString("name").ifBlank { return@let null }
+                    val mime = payload.optString("mime").ifBlank { "text/plain" }
+                    listOf(
+                        ChatAttachmentUi(
+                            kind = AttachmentKind.DOCUMENT,
+                            displayName = name,
+                            mimeType = mime,
+                        ),
+                    )
+                }
+        }.flatten().toList()
+        return attachments.ifEmpty { null }
+    }
+
+    private fun normalizeUserDisplayText(rawText: String, attachments: List<ChatAttachmentUi>): String {
+        if (attachments.isEmpty()) {
+            return rawText.trim()
+        }
+        if (attachments.all { it.kind == AttachmentKind.IMAGE }) {
+            val normalized = rawText.trim()
+            return if (normalized == IMAGE_ONLY_PROMPT) "" else normalized
+        }
+        if (attachments.none { it.kind == AttachmentKind.DOCUMENT }) {
+            return rawText.trim()
+        }
+        val firstDocumentStart = rawText.indexOf(DOCUMENT_PREFIX)
+        val visibleText = when {
+            firstDocumentStart >= 0 -> rawText.substring(0, firstDocumentStart).trim()
+            rawText.contains(DOCUMENT_CONTENT_MARKER) -> rawText.substringBefore(DOCUMENT_CONTENT_MARKER).trim()
+            else -> rawText.trim()
+        }
+        return visibleText
+    }
+
+    private fun resolveMimeTypeFromPath(path: String): String =
+        when (path.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            "pdf" -> "application/pdf"
+            else -> "application/octet-stream"
+        }
+
+    private fun scheduleAttachmentDeletion(attachment: ChatAttachmentUi?) {
+        if (attachment == null) {
+            return
+        }
+        viewModelScope.launch {
+            deleteAttachmentFiles(attachment)
+        }
+    }
+
+    private suspend fun deleteAttachmentFiles(attachment: ChatAttachmentUi?) {
+        if (attachment == null) {
+            return
+        }
+        attachment.previewPath?.let { runCatching { File(it).delete() } }
+        attachment.extractedTextPath?.let { runCatching { File(it).delete() } }
+        attachment.backendPath?.let { path ->
+            runCatching {
+                RootShell.run(
+                    command = "rm -f ${RootShell.shellQuote(path)}",
+                    timeoutMillis = 8_000L,
+                )
+            }
+        }
+    }
+
+    private suspend fun deleteThreadAttachmentArtifacts(threadId: String) {
+        val ids = persistedMessageAttachments.values
+            .filter { it.threadId == threadId }
+            .map { it.itemId }
+        ids.forEach { itemId ->
+            persistedMessageAttachments.remove(itemId)?.attachments?.forEach { deleteAttachmentFiles(it) }
+        }
+        if (ids.isNotEmpty()) {
+            persistMessageAttachments()
+        }
+        localDraftsByThread[threadId].orEmpty().forEach { draft ->
+            draft.attachments.forEach { deleteAttachmentFiles(it) }
+        }
+        if (localDraftsByThread.remove(threadId) != null) {
+            persistLocalDrafts()
+        }
+    }
 
     private fun buildSandboxPolicy(mode: PermissionMode): JSONObject =
         JSONObject().put("type", mode.sandboxPolicyType)
 
-    private fun appendLocalDraft(threadId: String, text: String): LocalDraftMessage {
+    private fun appendLocalDraft(
+        threadId: String,
+        displayText: String,
+        transportText: String,
+        attachments: List<ChatAttachmentUi>,
+    ): LocalDraftMessage {
         val draft = LocalDraftMessage(
             id = "local-${System.currentTimeMillis()}-${(1000..9999).random()}",
             threadId = threadId,
-            text = text.trim(),
+            text = displayText.trim(),
+            transportText = transportText.trim(),
             status = LocalMessageStatus.PENDING,
             createdAt = System.currentTimeMillis(),
+            attachments = attachments,
         )
         localDraftsByThread.getOrPut(threadId) { mutableListOf() }.add(draft)
         persistLocalDrafts()
@@ -1768,16 +2464,14 @@ class CodexMobileViewModel(
                 reconcileDraftsWithThread(recoveredThread)
             }
 
-            val matchedTurn = findLatestTurnForPrompt(recoveredThread, pending.prompt)
+            val matchedTurn = findMatchedTurnForPending(recoveredThread, pending)
             val hasPrompt = matchedTurn != null
-            val threadUpdatedAtMillis = (recoveredThread.updatedAtEpochSeconds ?: 0L) * 1000L
             val runningTurnId = when {
                 matchedTurn?.isRunning() == true -> matchedTurn.id
                 else -> recoveredThread.currentRunningTurnId()
             }
             val hasVisibleOutput = matchedTurn?.let(::turnHasVisibleAssistantOutput) == true
-            val promptCanBelongToPending =
-                hasPrompt && threadUpdatedAtMillis + THREAD_TIMESTAMP_SKEW_MS >= pending.createdAt
+            val promptCanBelongToPending = hasPrompt
 
             when {
                 promptCanBelongToPending && !runningTurnId.isNullOrBlank() -> {
@@ -1950,7 +2644,11 @@ class CodexMobileViewModel(
         }
     }
 
-    private fun reconcilePendingDraft(threadId: String, text: String): String? {
+    private fun reconcilePendingDraft(
+        threadId: String,
+        text: String,
+        attachments: List<ChatAttachmentUi>,
+    ): LocalDraftMessage? {
         val drafts = localDraftsByThread[threadId] ?: return null
         val activeDraftIds = activePendingTurnsForConversation(threadId)
             .map { it.localDraftId }
@@ -1962,7 +2660,10 @@ class CodexMobileViewModel(
         val matchIndex = drafts.indexOfFirst {
             it.status == LocalMessageStatus.PENDING &&
                 it.id in activeDraftIds &&
-                normalizeDraftText(it.text) == normalized
+                (
+                    (normalized.isNotBlank() && normalizeDraftText(it.text) == normalized) ||
+                        attachmentsRoughlyMatch(it.attachments, attachments)
+                    )
         }
         if (matchIndex >= 0) {
             val removed = drafts.removeAt(matchIndex)
@@ -1970,7 +2671,7 @@ class CodexMobileViewModel(
                 localDraftsByThread.remove(threadId)
             }
             persistLocalDrafts()
-            return removed.id
+            return removed
         }
         return null
     }
@@ -1979,15 +2680,12 @@ class CodexMobileViewModel(
         if (thread == null) {
             return
         }
-        val threadUpdatedAtMillis = (thread.updatedAtEpochSeconds ?: 0L) * 1000L
         activePendingTurnsForConversation(thread.id).forEach { pending ->
-            if (threadUpdatedAtMillis + THREAD_TIMESTAMP_SKEW_MS < pending.createdAt) {
+            val draft = findLocalDraft(pending.localDraftId) ?: return@forEach
+            if (findLatestTurnForDraft(thread, draft) == null) {
                 return@forEach
             }
-            if (findLatestTurnForPrompt(thread, pending.prompt) == null) {
-                return@forEach
-            }
-            onPendingDraftConfirmed(thread.id, pending.localDraftId)
+            onPendingDraftConfirmed(thread.id, draft)
         }
         if (activePendingTurnsForConversation(thread.id).isEmpty() && thread.runningTurnIds().isEmpty()) {
             markThreadPendingDraftsFailed(thread.id)
@@ -2082,8 +2780,12 @@ class CodexMobileViewModel(
                 id = id,
                 threadId = threadId,
                 text = text,
+                transportText = item.optString("transportText").ifBlank { text },
                 status = status,
                 createdAt = item.optLong("createdAt", System.currentTimeMillis()),
+                attachments = item.optJSONArray("attachments")?.toAttachmentUiList()
+                    ?: item.optJSONObject("attachment")?.toAttachmentUi()?.let(::listOf)
+                    ?: emptyList(),
             )
         }
         return drafts
@@ -2094,17 +2796,96 @@ class CodexMobileViewModel(
         localDraftsByThread.values.flatten()
             .sortedBy { it.createdAt }
             .forEach { draft ->
+                val item = JSONObject()
+                    .put("id", draft.id)
+                    .put("threadId", draft.threadId)
+                    .put("text", draft.text)
+                    .put("transportText", draft.transportText)
+                    .put("status", draft.status.name)
+                    .put("createdAt", draft.createdAt)
+                if (draft.attachments.isNotEmpty()) {
+                    item.put("attachments", draft.attachments.toJsonArray())
+                }
                 payload.put(
-                    JSONObject()
-                        .put("id", draft.id)
-                        .put("threadId", draft.threadId)
-                        .put("text", draft.text)
-                        .put("status", draft.status.name)
-                        .put("createdAt", draft.createdAt),
+                    item,
                 )
             }
         prefs.edit().putString(PREF_LOCAL_DRAFTS, payload.toString()).apply()
     }
+
+    private fun loadPersistedMessageAttachments(): Map<String, PersistedMessageAttachments> {
+        val encoded = prefs.getString(PREF_MESSAGE_ATTACHMENTS, null).orEmpty()
+        if (encoded.isBlank()) {
+            return emptyMap()
+        }
+        val payload = runCatching { JSONObject(encoded) }.getOrNull() ?: return emptyMap()
+        return buildMap {
+            payload.keys().forEach { itemId ->
+                val item = payload.optJSONObject(itemId) ?: return@forEach
+                val threadId = item.optString("threadId").ifBlank { return@forEach }
+                val attachments = item.optJSONArray("attachments")?.toAttachmentUiList()
+                    ?: item.optJSONObject("attachment")?.toAttachmentUi()?.let(::listOf)
+                    ?: emptyList()
+                if (attachments.isEmpty()) return@forEach
+                put(
+                    itemId,
+                    PersistedMessageAttachments(
+                        itemId = itemId,
+                        threadId = threadId,
+                        attachments = attachments,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun persistMessageAttachments() {
+        val payload = JSONObject()
+        persistedMessageAttachments.toSortedMap().forEach { (itemId, record) ->
+            payload.put(
+                itemId,
+                JSONObject()
+                    .put("threadId", record.threadId)
+                    .put("attachments", record.attachments.toJsonArray()),
+            )
+        }
+        prefs.edit().putString(PREF_MESSAGE_ATTACHMENTS, payload.toString()).apply()
+    }
+
+    private fun ChatAttachmentUi.toJson(): JSONObject =
+        JSONObject()
+            .put("kind", kind.name)
+            .put("displayName", displayName)
+            .put("mimeType", mimeType)
+            .put("previewPath", previewPath)
+            .put("backendPath", backendPath)
+            .put("extractedTextPath", extractedTextPath)
+
+    private fun List<ChatAttachmentUi>.toJsonArray(): JSONArray =
+        JSONArray().also { array ->
+            forEach { array.put(it.toJson()) }
+        }
+
+    private fun JSONObject.toAttachmentUi(): ChatAttachmentUi? {
+        val kind = runCatching { AttachmentKind.valueOf(optString("kind")) }.getOrNull() ?: return null
+        val displayName = optString("displayName").ifBlank { return null }
+        val mimeType = optString("mimeType").ifBlank { "application/octet-stream" }
+        return ChatAttachmentUi(
+            kind = kind,
+            displayName = displayName,
+            mimeType = mimeType,
+            previewPath = optString("previewPath").ifBlank { null },
+            backendPath = optString("backendPath").ifBlank { null },
+            extractedTextPath = optString("extractedTextPath").ifBlank { null },
+        )
+    }
+
+    private fun JSONArray.toAttachmentUiList(): List<ChatAttachmentUi> =
+        buildList {
+            for (index in 0 until length()) {
+                optJSONObject(index)?.toAttachmentUi()?.let(::add)
+            }
+        }
 
     private fun loadArchivedThreadIds(): Set<String> {
         val encoded = prefs.getString(PREF_ARCHIVED_THREAD_IDS, null).orEmpty()
@@ -2208,10 +2989,10 @@ class CodexMobileViewModel(
     private fun normalizeDraftText(value: String): String =
         value.trim().replace("\r\n", "\n")
 
-    private fun onPendingDraftConfirmed(threadId: String, localDraftId: String) {
+    private fun onPendingDraftConfirmed(threadId: String, draft: LocalDraftMessage) {
         val requestId = pendingTurns.values
             .filter { pending ->
-                pending.localDraftId == localDraftId &&
+                pending.localDraftId == draft.id &&
                     (pending.threadId == null || pending.threadId == threadId || pending.conversationKey == threadId)
             }
             .minByOrNull { it.createdAt }
@@ -2219,7 +3000,7 @@ class CodexMobileViewModel(
             ?: return
 
         val visibleThread = activeThread?.takeIf { it.id == threadId }
-        val matchedTurn = visibleThread?.let { findLatestTurnForPrompt(it, pendingTurns[requestId]?.prompt.orEmpty()) }
+        val matchedTurn = visibleThread?.let { findLatestTurnForDraft(it, draft) }
         val runningTurnId = when {
             matchedTurn?.isRunning() == true -> matchedTurn.id
             else -> visibleThread?.currentRunningTurnId()
@@ -2269,7 +3050,7 @@ class CodexMobileViewModel(
         }
 
     private fun findLatestTurnForPrompt(thread: MutableThread, prompt: String): MutableTurn? {
-        val normalizedPrompt = normalizeDraftText(prompt)
+        val normalizedPrompt = normalizeDraftText(normalizePromptForComparison(prompt))
         return thread.turns.lastOrNull { turn ->
             turn.items.any { item ->
                 item.type == "userMessage" && normalizeDraftText(item.primaryText) == normalizedPrompt
@@ -2277,13 +3058,65 @@ class CodexMobileViewModel(
         }
     }
 
+    private fun findLatestTurnForDraft(thread: MutableThread, draft: LocalDraftMessage): MutableTurn? {
+        val normalizedPrompt = normalizeDraftText(normalizePromptForComparison(draft.transportText))
+        return thread.turns.lastOrNull { turn ->
+            turn.items.any { item ->
+                item.type == "userMessage" && (
+                    (normalizedPrompt.isNotBlank() && normalizeDraftText(item.primaryText) == normalizedPrompt) ||
+                        attachmentsRoughlyMatch(item.attachments, draft.attachments)
+                    )
+            }
+        }
+    }
+
+    private fun findMatchedTurnForPending(
+        thread: MutableThread,
+        pending: PendingTurn,
+    ): MutableTurn? {
+        val draft = findLocalDraft(pending.localDraftId)
+        return if (draft != null) {
+            findLatestTurnForDraft(thread, draft)
+        } else {
+            findLatestTurnForPrompt(thread, pending.prompt)
+        }
+    }
+
+    private fun attachmentsRoughlyMatch(
+        left: List<ChatAttachmentUi>,
+        right: List<ChatAttachmentUi>,
+    ): Boolean {
+        if (left.isEmpty() || right.isEmpty() || left.size != right.size) {
+            return false
+        }
+        if (left.map { it.kind } != right.map { it.kind }) {
+            return false
+        }
+        return left.zip(right).all { (a, b) ->
+            when (a.kind) {
+                AttachmentKind.IMAGE -> true
+                AttachmentKind.DOCUMENT ->
+                    normalizeDraftText(a.displayName).equals(normalizeDraftText(b.displayName), ignoreCase = true) &&
+                        a.mimeType.equals(b.mimeType, ignoreCase = true)
+            }
+        }
+    }
+
     private fun threadHasUserPrompt(thread: MutableThread, prompt: String): Boolean {
-        val normalizedPrompt = normalizeDraftText(prompt)
+        val normalizedPrompt = normalizeDraftText(normalizePromptForComparison(prompt))
         return thread.turns.any { turn ->
             turn.items.any { item ->
                 item.type == "userMessage" && normalizeDraftText(item.primaryText) == normalizedPrompt
             }
         }
+    }
+
+    private fun normalizePromptForComparison(prompt: String): String {
+        if (prompt.trim() == IMAGE_ONLY_PROMPT) {
+            return ""
+        }
+        val attachments = parseDocumentAttachmentsFromText(prompt) ?: return prompt
+        return normalizeUserDisplayText(prompt, attachments)
     }
 
     private fun loadInitialState(): CodexMobileUiState {
@@ -2448,6 +3281,7 @@ class CodexMobileViewModel(
                     sending = sending,
                     canInterrupt = latestRunningTurnId() != null,
                     text = if (clearText) "" else state.composer.text,
+                    attachments = if (clearText) emptyList() else state.composer.attachments,
                 ),
             )
         }
@@ -2599,8 +3433,23 @@ class CodexMobileViewModel(
         val id: String,
         val threadId: String,
         val text: String,
+        val transportText: String,
         val status: LocalMessageStatus,
         val createdAt: Long,
+        val attachments: List<ChatAttachmentUi> = emptyList(),
+    )
+
+    private data class PreparedSubmission(
+        val displayText: String,
+        val transportText: String,
+        val input: JSONArray,
+        val attachments: List<ChatAttachmentUi> = emptyList(),
+    )
+
+    private data class PersistedMessageAttachments(
+        val itemId: String,
+        val threadId: String,
+        val attachments: List<ChatAttachmentUi>,
     )
 
     private enum class PendingTurnPhase {
@@ -2693,12 +3542,14 @@ class CodexMobileViewModel(
         var status: String = "",
         var command: String = "",
         var cwd: String = "",
+        var attachments: List<ChatAttachmentUi> = emptyList(),
     ) {
         fun toUi(sortKey: String, turnStatus: String): ChatItemUi = when (type) {
             "userMessage" -> ChatItemUi.User(
                 id = id,
                 sortKey = sortKey,
                 text = primaryText,
+                attachments = attachments,
             )
 
             "agentMessage" -> ChatItemUi.Agent(
@@ -2759,6 +3610,7 @@ class CodexMobileViewModel(
         private const val PREF_LAST_OPENED_THREAD_ID = "last_opened_thread_id"
         private const val PREF_LAST_OPENED_THREAD_TITLE = "last_opened_thread_title"
         private const val PREF_LOCAL_DRAFTS = "local_drafts"
+        private const val PREF_MESSAGE_ATTACHMENTS = "message_attachments"
         private const val PREF_ARCHIVED_THREAD_IDS = "archived_thread_ids"
         private const val PREF_DELETED_THREAD_IDS = "deleted_thread_ids"
         private const val PREF_CUSTOM_THREAD_TITLES = "custom_thread_titles"
@@ -2769,6 +3621,14 @@ class CodexMobileViewModel(
         private const val DEFAULT_REASONING = "xhigh"
         private const val FAST_SERVICE_TIER = "fast"
         private const val TERMUX_HOME = "/data/data/com.termux/files/home"
+        private const val IMAGE_ONLY_PROMPT = "请查看这个图片附件。"
+        private const val DOCUMENT_PREFIX = "<<<CODEX_MOBILE_DOCUMENT:"
+        private const val DOCUMENT_SUFFIX = ">>>"
+        private const val DOCUMENT_CONTENT_MARKER = "\n\n以下是附件内容（可能已截断）：\n"
+        private const val APP_ATTACHMENT_DIR = "codex-mobile-attachments"
+        private const val BACKEND_ATTACHMENT_DIR = "/data/local/tmp/codex-mobile-attachments"
+        private const val MAX_ATTACHMENTS = 4
+        private const val MAX_DOCUMENT_CHARS = 20_000
         private const val THREAD_LIMIT = 60
         private const val RPC_URL = "ws://127.0.0.1:8765"
         private const val PENDING_TURN_RECOVERY_MS = 3_000L
@@ -2797,10 +3657,21 @@ class CodexMobileViewModel(
             if (text.isBlank()) {
                 return null
             }
-            return when (text.lowercase()) {
+            val cleaned = run {
+                val firstDocumentStart = text.indexOf(DOCUMENT_PREFIX)
+                when {
+                    firstDocumentStart >= 0 -> text.substring(0, firstDocumentStart).trim()
+                    text.contains(DOCUMENT_CONTENT_MARKER) -> text.substringBefore(DOCUMENT_CONTENT_MARKER).trim()
+                    else -> text
+                }
+            }
+            if (cleaned.isBlank()) {
+                return null
+            }
+            return when (cleaned.lowercase()) {
                 "null",
                 "undefined" -> null
-                else -> text
+                else -> cleaned
             }
         }
     }
