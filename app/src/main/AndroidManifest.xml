@@ -24,13 +24,13 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.CodexMobile">
         <service
-            android:name=".service.BackendForegroundService"
+            android:name="io.github.aeewws.codexmobile.service.BackendForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <activity
-            android:name=".MainActivity"
+            android:name="io.github.aeewws.codexmobile.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.CodexMobile">
