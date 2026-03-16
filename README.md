@@ -1,8 +1,17 @@
 # Codex Mobile
 
+[![Android CI](https://github.com/aeewws/codex-mobile/actions/workflows/android-ci.yml/badge.svg)](https://github.com/aeewws/codex-mobile/actions/workflows/android-ci.yml)
+[![MIT License](https://img.shields.io/github/license/aeewws/codex-mobile)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Android%209%2B-3DDC84)
+![Status](https://img.shields.io/badge/status-active%20prototype-0A7EA4)
+
 Codex Mobile turns a local Termux-based Codex backend into a touch-first Android product instead of a terminal-first workflow.
 
+It is a mobile-first shell for a real local Codex runtime, not a fake chat wrapper and not a terminal screenshot in an app.
+
 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
+
+Quick links: [Setup](docs/setup.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## Why This Exists
 
@@ -14,6 +23,13 @@ The project is focused on:
 - thread recovery after reconnects or backgrounding
 - local backend lifecycle management
 - exposing model, reasoning, and permission controls without raw terminal UX
+
+## What Makes It Different
+
+- it connects to a real local Codex backend inside Termux instead of proxying to a fake mobile chat shell
+- it is designed around thread recovery, reconnect handling, and long-session resilience on an actual phone
+- it treats backend lifecycle and keepalive hardening as part of the product, not just an install note
+- it is being shaped by daily use on a real device, so the tradeoffs are practical rather than hypothetical
 
 ## Current Status
 
@@ -42,6 +58,13 @@ This repository is the app project itself. It is not a one-click exported phone 
 - document attachment extraction for supported formats
 - long-thread recovery improvements for unstable mobile/runtime conditions
 
+## Repository Health
+
+- Android CI runs on pull requests and on pushes to `main`
+- issue templates and a pull request template are included for repeatable maintenance
+- dependency updates are configured through Dependabot
+- a basic security policy and maintainer ownership file are included
+
 ## Compatibility And Setup
 
 Current expected environment:
@@ -53,6 +76,8 @@ Current expected environment:
 - root access for the current backend lifecycle design
 
 Quick start and environment notes live in [docs/setup.md](docs/setup.md).
+
+This project is best evaluated as "an Android product shell around a local coding runtime", not as a general-purpose Android app that can run without environment assumptions.
 
 ## Development
 
