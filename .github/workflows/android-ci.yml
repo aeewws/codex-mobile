@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload phone-compatible debug APK
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: codex-mobile-legacy-debug-apk
           path: app/build/outputs/apk/legacy/debug/*.apk
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload OSS debug APK
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: codex-mobile-oss-debug-apk
           path: app/build/outputs/apk/oss/debug/*.apk
