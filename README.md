@@ -45,9 +45,9 @@ This repository is the app project itself. It is not a one-click exported phone 
 
 ## Screenshots
 
-| Chat | Commands |
-| --- | --- |
-| ![Chat screen](docs/images/chat.png) | ![Commands screen](docs/images/commands.png) |
+| Attachment Sheet | History | Settings |
+| --- | --- | --- |
+| ![Attachment sheet](docs/images/attachments.jpg) | ![History screen](docs/images/history.jpg) | ![Settings screen](docs/images/settings.jpg) |
 
 ## Current Features
 
