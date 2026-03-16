@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Security policy
+    url: https://github.com/aeewws/codex-mobile/blob/main/SECURITY.md
+    about: Read this before reporting vulnerabilities or sensitive findings.
   - name: Setup notes
     url: https://github.com/aeewws/codex-mobile/blob/main/docs/setup.md
     about: Check the current runtime and device assumptions before filing an issue.

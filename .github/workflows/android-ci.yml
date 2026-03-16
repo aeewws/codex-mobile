@@ -5,6 +5,11 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -43,3 +48,4 @@ jobs:
           name: codex-mobile-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
+          retention-days: 14
