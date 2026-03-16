@@ -11,7 +11,7 @@ It is a mobile-first shell for a real local Codex runtime, not a fake chat wrapp
 
 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
 
-Quick links: [Setup](docs/setup.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+Quick links: [Project brief](docs/project-brief.md) · [Setup](docs/setup.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## Why This Exists
 
