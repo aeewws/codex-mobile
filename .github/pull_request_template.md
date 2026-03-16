@@ -5,8 +5,9 @@
 
 ## Testing
 
-- [ ] `./gradlew testDebugUnitTest`
-- [ ] `./gradlew assembleDebug`
+- [ ] `./gradlew testLegacyDebugUnitTest testOssDebugUnitTest`
+- [ ] `./gradlew assembleLegacyDebug`
+- [ ] `./gradlew assembleOssDebug`
 - [ ] manual device check when relevant
 
 ## Notes
