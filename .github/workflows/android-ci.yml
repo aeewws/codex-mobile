@@ -18,6 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      CODEX_MOBILE_KEYSTORE_B64: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 }}
       CODEX_MOBILE_KEYSTORE_PATH: ${{ github.workspace }}/signing/phone-compat.keystore
       CODEX_MOBILE_KEYSTORE_PASSWORD: ${{ secrets.CODEX_MOBILE_KEYSTORE_PASSWORD }}
       CODEX_MOBILE_KEY_ALIAS: ${{ secrets.CODEX_MOBILE_KEY_ALIAS }}
@@ -41,11 +42,11 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Prepare shared signing keystore
-        if: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 != '' }}
+        if: ${{ env.CODEX_MOBILE_KEYSTORE_B64 != '' }}
         shell: bash
         run: |
           mkdir -p "$(dirname "$CODEX_MOBILE_KEYSTORE_PATH")"
-          echo "${{ secrets.CODEX_MOBILE_KEYSTORE_B64 }}" | base64 -d > "$CODEX_MOBILE_KEYSTORE_PATH"
+          echo "$CODEX_MOBILE_KEYSTORE_B64" | base64 -d > "$CODEX_MOBILE_KEYSTORE_PATH"
 
       - name: Run unit tests
         run: ./gradlew --no-daemon testLegacyDebugUnitTest testOssDebugUnitTest
