@@ -1,4 +1,4 @@
-package com.example.myapplication.ui.app
+package io.github.aeewws.codexmobile.ui.app
 
 import android.content.Intent
 import android.graphics.Bitmap

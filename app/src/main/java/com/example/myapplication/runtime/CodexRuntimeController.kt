@@ -1,4 +1,4 @@
-package com.example.myapplication.runtime
+package io.github.aeewws.codexmobile.runtime
 
 import android.app.Activity
 import android.content.Context
@@ -8,7 +8,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.example.myapplication.service.BackendForegroundService
+import io.github.aeewws.codexmobile.service.BackendForegroundService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

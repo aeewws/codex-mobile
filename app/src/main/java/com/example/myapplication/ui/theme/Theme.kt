@@ -1,4 +1,4 @@
-package com.example.myapplication.ui.theme
+package io.github.aeewws.codexmobile.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -39,7 +39,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun MyApplicationTheme(
+fun CodexMobileTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit

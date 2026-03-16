@@ -1,4 +1,4 @@
-package com.example.myapplication
+package io.github.aeewws.codexmobile
 
 import org.junit.Test
 
