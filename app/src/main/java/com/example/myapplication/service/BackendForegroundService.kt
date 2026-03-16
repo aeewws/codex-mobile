@@ -1,4 +1,4 @@
-package com.example.myapplication.service
+package io.github.aeewws.codexmobile.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,8 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.example.myapplication.R
-import com.example.myapplication.runtime.CodexRuntimeController
+import io.github.aeewws.codexmobile.R
+import io.github.aeewws.codexmobile.runtime.CodexRuntimeController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

@@ -1,14 +1,14 @@
-package com.example.myapplication
+package io.github.aeewws.codexmobile
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import com.example.myapplication.runtime.ProjectRootOption
-import com.example.myapplication.ui.app.CodexMobileApp
-import com.example.myapplication.ui.app.CodexMobileViewModel
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import io.github.aeewws.codexmobile.runtime.ProjectRootOption
+import io.github.aeewws.codexmobile.ui.app.CodexMobileApp
+import io.github.aeewws.codexmobile.ui.app.CodexMobileViewModel
+import io.github.aeewws.codexmobile.ui.theme.CodexMobileTheme
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class MainActivity : ComponentActivity() {
@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MyApplicationTheme {
+            CodexMobileTheme {
                 CodexMobileApp(
                     viewModel = viewModel,
                     onOpenTermux = { viewModel.openTermux(this@MainActivity) },

@@ -1,9 +1,9 @@
-package com.example.myapplication.bridge
+package io.github.aeewws.codexmobile.bridge
 
 import android.webkit.JavascriptInterface
 import androidx.lifecycle.LifecycleCoroutineScope
-import com.example.myapplication.MainActivity
-import com.example.myapplication.runtime.CodexRuntimeController
+import io.github.aeewws.codexmobile.MainActivity
+import io.github.aeewws.codexmobile.runtime.CodexRuntimeController
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 

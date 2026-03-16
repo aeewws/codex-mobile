@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement for Codex Mobile.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      placeholder: What workflow is missing or painful today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      placeholder: Describe the feature you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      placeholder: How are you handling this today?
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      placeholder: Mockups, screenshots, or related references.

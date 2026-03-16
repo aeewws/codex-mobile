@@ -1,4 +1,4 @@
-package com.example.myapplication.ui.app
+package io.github.aeewws.codexmobile.ui.app
 
 import android.app.Activity
 import android.app.Application
@@ -9,8 +9,8 @@ import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.runtime.CodexRuntimeController
-import com.example.myapplication.runtime.RootShell
+import io.github.aeewws.codexmobile.runtime.CodexRuntimeController
+import io.github.aeewws.codexmobile.runtime.RootShell
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.CancellationException

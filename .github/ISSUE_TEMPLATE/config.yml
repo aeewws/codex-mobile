@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setup notes
+    url: https://github.com/aeewws/codex-mobile/blob/main/docs/setup.md
+    about: Check the current runtime and device assumptions before filing an issue.

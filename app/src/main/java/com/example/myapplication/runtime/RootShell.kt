@@ -1,4 +1,4 @@
-package com.example.myapplication.runtime
+package io.github.aeewws.codexmobile.runtime
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
