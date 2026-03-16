@@ -17,6 +17,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CODEX_MOBILE_KEYSTORE_B64: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 }}
+      CODEX_MOBILE_KEYSTORE_PATH: ${{ github.workspace }}/signing/phone-compat.keystore
+      CODEX_MOBILE_KEYSTORE_PASSWORD: ${{ secrets.CODEX_MOBILE_KEYSTORE_PASSWORD }}
+      CODEX_MOBILE_KEY_ALIAS: ${{ secrets.CODEX_MOBILE_KEY_ALIAS }}
+      CODEX_MOBILE_KEY_PASSWORD: ${{ secrets.CODEX_MOBILE_KEY_PASSWORD }}
 
     steps:
       - name: Check out repository
@@ -35,17 +41,36 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
 
+      - name: Prepare shared signing keystore
+        if: ${{ env.CODEX_MOBILE_KEYSTORE_B64 != '' }}
+        shell: bash
+        run: |
+          mkdir -p "$(dirname "$CODEX_MOBILE_KEYSTORE_PATH")"
+          echo "$CODEX_MOBILE_KEYSTORE_B64" | base64 -d > "$CODEX_MOBILE_KEYSTORE_PATH"
+
       - name: Run unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: ./gradlew --no-daemon testLegacyDebugUnitTest testOssDebugUnitTest
 
-      - name: Assemble debug APK
-        run: ./gradlew --no-daemon assembleDebug
+      - name: Assemble phone-compatible debug APK
+        run: ./gradlew --no-daemon assembleLegacyDebug
 
-      - name: Upload debug APK
+      - name: Assemble OSS debug APK
+        run: ./gradlew --no-daemon assembleOssDebug
+
+      - name: Upload phone-compatible debug APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codex-mobile-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: codex-mobile-legacy-debug-apk
+          path: app/build/outputs/apk/legacy/debug/*.apk
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload OSS debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-mobile-oss-debug-apk
+          path: app/build/outputs/apk/oss/debug/*.apk
           if-no-files-found: ignore
           retention-days: 14

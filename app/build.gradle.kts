@@ -3,6 +3,35 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+fun stringPropertyOrEnv(propertyName: String, envName: String, fallback: String? = null): String? {
+    val propertyValue = (project.findProperty(propertyName) as String?)?.takeIf { it.isNotBlank() }
+    val envValue = System.getenv(envName)?.takeIf { it.isNotBlank() }
+    return propertyValue ?: envValue ?: fallback
+}
+
+val localDebugKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
+val sharedSigningKeystorePath = stringPropertyOrEnv(
+    propertyName = "codexMobile.keystore.path",
+    envName = "CODEX_MOBILE_KEYSTORE_PATH",
+    fallback = localDebugKeystore.takeIf { it.exists() }?.absolutePath,
+)
+val sharedSigningEnabled = !sharedSigningKeystorePath.isNullOrBlank()
+val sharedSigningStorePassword = stringPropertyOrEnv(
+    propertyName = "codexMobile.keystore.password",
+    envName = "CODEX_MOBILE_KEYSTORE_PASSWORD",
+    fallback = "android",
+)!!
+val sharedSigningKeyAlias = stringPropertyOrEnv(
+    propertyName = "codexMobile.key.alias",
+    envName = "CODEX_MOBILE_KEY_ALIAS",
+    fallback = "androiddebugkey",
+)!!
+val sharedSigningKeyPassword = stringPropertyOrEnv(
+    propertyName = "codexMobile.key.password",
+    envName = "CODEX_MOBILE_KEY_PASSWORD",
+    fallback = "android",
+)!!
+
 android {
     namespace = "io.github.aeewws.codexmobile"
     compileSdk {
@@ -12,7 +41,6 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.myapplication"
         minSdk = 28
         targetSdk = 36
         versionCode = 2
@@ -21,13 +49,45 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    flavorDimensions += "distribution"
+
+    productFlavors {
+        create("legacy") {
+            dimension = "distribution"
+            applicationId = "com.example.myapplication"
+        }
+        create("oss") {
+            dimension = "distribution"
+            applicationId = "io.github.aeewws.codexmobile"
+        }
+    }
+
+    if (sharedSigningEnabled) {
+        signingConfigs {
+            create("sharedCompat") {
+                storeFile = file(sharedSigningKeystorePath!!)
+                storePassword = sharedSigningStorePassword
+                keyAlias = sharedSigningKeyAlias
+                keyPassword = sharedSigningKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            if (sharedSigningEnabled) {
+                signingConfig = signingConfigs.getByName("sharedCompat")
+            }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (sharedSigningEnabled) {
+                signingConfig = signingConfigs.getByName("sharedCompat")
+            }
         }
     }
     compileOptions {

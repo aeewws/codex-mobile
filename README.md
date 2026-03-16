@@ -81,14 +81,20 @@ This project is best evaluated as "an Android product shell around a local codin
 
 ## Development
 
+Build channels:
+
+- `legacyDebug` keeps package compatibility with the working phone install line
+- `ossDebug` uses the public `io.github.aeewws.codexmobile` application id for open-source distribution
+
 Local development commands:
 
 ```bash
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
+./gradlew testLegacyDebugUnitTest testOssDebugUnitTest
+./gradlew assembleLegacyDebug
+./gradlew assembleOssDebug
 ```
 
-The repository also includes a GitHub Actions workflow that builds the debug APK on pushes and pull requests.
+The repository also includes a GitHub Actions workflow that builds both debug channels on pushes and pull requests.
 
 ## Project Scope
 

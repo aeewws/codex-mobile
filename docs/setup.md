@@ -26,7 +26,7 @@ This repository contains the Android app project. It does not contain:
 2. Sync the Gradle project and install the required Android SDK components.
 3. Prepare your device-side Termux environment.
 4. Make sure Codex can run inside Termux before testing the Android app.
-5. Build and install the app with Android Studio or `./gradlew assembleDebug`.
+5. Build and install the app with Android Studio, `./gradlew assembleLegacyDebug`, or `./gradlew assembleOssDebug`.
 6. Launch the app, then verify backend detection, reconnect behavior, and thread loading.
 
 ## Termux Runtime Notes
