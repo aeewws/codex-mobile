@@ -13,6 +13,10 @@ It is a mobile-first shell for a real local Codex runtime, not a fake chat wrapp
 
 Quick links: [Project brief](docs/project-brief.md) · [Setup](docs/setup.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
+## 🌍 Ecosystem Impact (OpenAI Codex Program)
+
+Codex Mobile brings the power of **local AI development models** directly to Android. By bridging a robust Termux runtime with a native mobile-first touch UI, this project allows developers to maintain long-lived Codex sessions, run real AI coding operations, and review generated code directly on their phones. It significantly lowers the barrier for experimenting with and deploying local language models in mobile environments.
+
 ## Why This Exists
 
 The terminal workflow is powerful, but it is not a good mobile product. Codex Mobile is an attempt to make local AI coding usable on a real Android phone without pretending the terminal is the final UI.
@@ -57,6 +61,21 @@ This repository is the app project itself. It is not a one-click exported phone 
 - model switching, reasoning level switching, permission modes, and Fast mode
 - document attachment extraction for supported formats
 - long-thread recovery improvements for unstable mobile/runtime conditions
+
+## Architecture
+
+```mermaid
+graph TD
+    A[Codex Mobile App<br>Jetpack Compose UI] -->|Local Socket / IPC| B(Termux Runtime Shell)
+    B -->|Background Hardening| B
+    B <-->|Executes Models| C{Codex CLI / LLM Core}
+    C -->|Local Processing| D[(On-Device Models)]
+    C -->|API Requests| E[(OpenAI API / Cloud)]
+    
+    style A fill:#0A7EA4,stroke:#fff,stroke-width:2px,color:#fff
+    style B fill:#3DDC84,stroke:#fff,stroke-width:2px,color:#fff
+    style C fill:#333,stroke:#fff,stroke-width:2px,color:#fff
+```
 
 ## Repository Health
 
