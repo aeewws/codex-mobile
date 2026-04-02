@@ -93,6 +93,6 @@ Recent repository work improved public maintainability signals:
 ## Useful Links
 
 - Repository: [aeewws/codex-mobile](https://github.com/aeewws/codex-mobile)
-- Release: [v0.2.0](https://github.com/aeewws/codex-mobile/releases/tag/v0.2.0)
+- Release: [v0.3.0](https://github.com/aeewws/codex-mobile/releases/tag/v0.3.0)
 - Setup: [docs/setup.md](./setup.md)
 - Roadmap: [docs/roadmap.md](./roadmap.md)
