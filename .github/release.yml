@@ -5,22 +5,22 @@ changelog:
     authors:
       - dependabot
   categories:
-    - title: Breaking Changes 🛠
+    - title: 破坏性变更
       labels:
         - breaking-change
-    - title: Exciting New Features 🎉
+    - title: 新功能
       labels:
         - enhancement
         - feature
-    - title: Bug Fixes 🐛
+    - title: 问题修复
       labels:
         - bug
         - force-release
-    - title: Maintenance 🏗
+    - title: 维护与文档
       labels:
         - chore
         - documentation
         - cleanup
-    - title: Other Changes
+    - title: 其他改动
       labels:
         - "*"

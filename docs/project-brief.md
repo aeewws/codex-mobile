@@ -1,98 +1,101 @@
-# Codex Mobile Project Brief
+# Codex Mobile 项目说明
 
-This page is a public-facing summary of what Codex Mobile is, why it exists, and how to describe it consistently.
+这是一份公开可见的项目说明页，用来统一回答三个问题：这个项目是什么、为什么值得做、以及对外应该怎么描述。
 
-## One-Line Summary
+需要英文版时，请看 [project-brief.en.md](./project-brief.en.md)。
 
-Codex Mobile is a mobile-first Android shell for a real local Codex runtime in Termux.
+## 一句话介绍
 
-## What It Is
+Codex Mobile 是一个围绕真实本地 Codex 运行时构建的 Android 移动端外壳。
 
-Codex Mobile turns a local Termux-based Codex backend into a touch-first Android product instead of a terminal-first workflow.
+## 这个项目是什么
 
-It is not:
+Codex Mobile 的目标，是把运行在 Termux 里的本地 Codex 后端，做成一个更像产品、而不是终端工具的 Android 体验。
 
-- a fake chat wrapper around a remote model
-- a terminal screenshot packaged as an app
-- a generic Android AI client with no runtime assumptions
+它不是：
 
-It is:
+- 一个假的聊天壳
+- 一个把终端截图塞进 App 的包装层
+- 一个没有运行时假设的通用 AI 客户端
 
-- a real mobile UI around a local Codex runtime
-- a bridge between Android product interaction and Termux-hosted backend execution
-- a practical experiment in making local AI coding usable on an actual phone
+它是：
 
-## Why It Matters
+- 一个围绕真实本地 Codex 运行时构建的移动端 UI
+- 一个把 Android 产品交互和 Termux 后端执行接起来的桥接层
+- 一个让本地 AI coding workflow 在真实手机上变得可用的产品化尝试
 
-Most local coding-agent workflows are terminal-native and desktop-oriented. That makes them powerful, but hard to use from a real mobile device.
+## 为什么这个方向有价值
 
-Codex Mobile explores a different layer of the stack:
+大多数本地 coding agent 工作流都是终端优先、桌面优先的。它们很强，但放到真实手机上之后，可用性会立刻掉很多。
 
-- mobile thread recovery and reconnect behavior
-- product-style session history and lifecycle management
-- model, reasoning, and permission controls exposed in a touch-first UI
-- Android-specific runtime constraints such as backgrounding, keepalive, and instability handling
+Codex Mobile 试图解决的是另一层问题：
 
-## Current Public Signals
+- 手机上的线程恢复和重连
+- 更像产品的历史会话与生命周期管理
+- 在触摸界面里暴露模型、智力、权限等控制项
+- Android 上后台、保活、易断连等运行时约束
 
-- public GitHub repository
-- MIT license
-- CI running on pull requests and `main`
-- release history
-- maintainer docs such as `SECURITY.md`, `CODEOWNERS`, and Dependabot config
-- setup notes and roadmap docs
+## 当前公开信号
 
-## What Exists Today
+- 公开 GitHub 仓库
+- MIT 许可证
+- PR 与 `main` 上的 CI
+- 已发布 release
+- `SECURITY.md`、`CODEOWNERS`、Dependabot 等维护者文件
+- setup 和 roadmap 文档
 
-- Android app built with Jetpack Compose
-- local backend bridge to a Termux-hosted Codex runtime
-- history, archive, restore, rename, and delete flows
-- model switching, reasoning switching, permission modes, and Fast mode
-- document attachment extraction for supported formats
-- long-thread recovery work for unstable mobile scenarios
+## 当前已经公开出来的能力
 
-## What Makes The Project Non-Trivial
+- 基于 Jetpack Compose 的 Android App
+- 连接到 Termux 本地 Codex 运行时的桥接层
+- 历史会话、归档、恢复、重命名、删除流程
+- 模型切换、智力切换、权限模式和 Fast 模式
+- 支持部分文档附件的内容提取
+- 面向长线程和移动端不稳定场景的恢复处理
 
-- it depends on a real local runtime instead of a mocked interface
-- Android backgrounding and reconnect behavior are part of the product problem
-- the backend lifecycle is part of the UX, not just an install detail
-- it has to reconcile product design with rooted-device and local-runtime constraints
+## 这个项目为什么不只是一个前端壳
 
-## Copyable Blurbs
+- 接的是真实本地运行时，不是 mocked interface
+- Android 的后台、重连、恢复，本来就是产品问题的一部分
+- 后端生命周期属于 UX 的一部分，不只是安装说明
+- 它要同时处理产品交互和 rooted device / local runtime 的约束
 
-### Short
+## 可直接复制的对外文案
 
-Codex Mobile is a mobile-first Android shell for a real local Codex runtime in Termux, focused on thread recovery, session lifecycle, and touch-first interaction.
+### 短版
 
-### Medium
+Codex Mobile 是一个围绕真实本地 Codex 运行时构建的 Android 移动端外壳，重点解决线程恢复、会话生命周期和触摸优先交互。
 
-Codex Mobile is an Android product shell around a real local Codex runtime hosted in Termux. Instead of treating the terminal as the final interface, it adds a touch-first mobile layer for chat, history, reconnect handling, model controls, and runtime lifecycle management on a real phone.
+### 中版
 
-### Longer
+Codex Mobile 是一个 Android 产品层，底层连接的是运行在 Termux 里的真实本地 Codex 运行时。它不是把终端直接搬上手机，而是补上聊天、历史、重连、模型控制和运行时生命周期管理这些手机端真正需要的交互。
 
-Codex Mobile is an Android app that turns a local Termux-based Codex backend into a usable mobile product. The project focuses on the hard parts that appear when a coding-agent workflow leaves the desktop: thread recovery, reconnect handling, local backend lifecycle, mobile-friendly session history, and exposing runtime controls without raw terminal UX. It is not a fake chat wrapper; it is a mobile-first shell around a real local coding runtime.
+### 长版
 
-## Suggested OSS Positioning
+Codex Mobile 是一个 Android 应用，目标是把运行在 Termux 里的本地 Codex 后端做成可在真实手机上使用的产品。这个项目关注的不只是界面，而是 coding agent 工作流离开桌面后真正会遇到的问题，例如线程恢复、重连、本地后端生命周期、移动端历史管理，以及如何在不暴露原始终端 UX 的情况下提供运行时控制。它不是假的聊天壳，而是一层围绕真实本地 coding runtime 的移动端产品外壳。
 
-If you need to describe the project to reviewers, users, or maintainers, the safest consistent framing is:
+## 对外定位建议
 
-1. Codex Mobile is a mobile-first shell around a real local runtime.
-2. The project focuses on productizing local AI coding workflows for Android.
-3. The hard problems are reliability, lifecycle, recovery, and mobile interaction, not just front-end rendering.
+如果你要对评审、用户、维护者描述这个项目，最稳的说法是：
 
-## Recent Progress
+1. 它是一个围绕真实本地运行时构建的 mobile-first shell。
+2. 它做的是把本地 AI coding workflow 产品化到 Android。
+3. 真正难的不是“做个界面”，而是可靠性、生命周期、恢复和移动端交互。
 
-Recent repository work improved public maintainability signals:
+## 最近这段时间的进展
 
-- clearer README and Chinese README framing
-- CI workflow improvements
-- release publishing
-- maintainer docs and security policy
-- source path cleanup to match the real package name
+最近一轮仓库工作主要强化了公开维护信号：
 
-## Useful Links
+- 首页 README 切到中文优先
+- 文档入口调整为中文在前、英文在后
+- CI 工作流更完整
+- 发了正式 release
+- 加了安全说明和维护者文件
+- 源码路径和真实包名对齐
 
-- Repository: [aeewws/codex-mobile](https://github.com/aeewws/codex-mobile)
-- Release: [v0.3.0](https://github.com/aeewws/codex-mobile/releases/tag/v0.3.0)
-- Setup: [docs/setup.md](./setup.md)
-- Roadmap: [docs/roadmap.md](./roadmap.md)
+## 相关链接
+
+- 仓库主页：[aeewws/codex-mobile](https://github.com/aeewws/codex-mobile)
+- Release：[v0.3.0](https://github.com/aeewws/codex-mobile/releases/tag/v0.3.0)
+- 环境与安装：[docs/setup.md](./setup.md)
+- 路线图：[docs/roadmap.md](./roadmap.md)

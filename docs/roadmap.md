@@ -1,25 +1,25 @@
-# Codex Mobile Roadmap
+# Codex Mobile 路线图
 
-This roadmap is directional, not a promise.
+这份路线图只表达方向，不是对外承诺。英文版请看 [roadmap.en.md](./roadmap.en.md)。
 
-## Near Term
+## 近期
 
-- tighten bridge and reconnect stability
-- improve long-thread recovery and state restoration
-- polish chat ergonomics for real phone use
-- expose image input in the main UI
-- improve setup documentation and contributor onboarding
+- 继续加固桥接层和重连稳定性
+- 提升长线程恢复和状态还原
+- 打磨更适合真实手机使用的聊天交互
+- 把图片输入接到主界面
+- 继续完善环境说明和贡献者上手文档
 
-## Next
+## 下一阶段
 
-- publish repeatable CI build outputs
-- expand English-facing documentation
-- improve diagnostics for backend startup failures
-- make the runtime and device assumptions more explicit in-app
+- 提供更可重复的 CI 构建产物
+- 把英文文档收敛为次级入口而不是主入口
+- 补强后端启动失败时的诊断信息
+- 在 App 内把运行时与设备假设说明得更明确
 
-## Exploration
+## 探索项
 
-- reduce rooted-device friction where technically possible
-- extract reusable Android or Termux bridge components
-- improve attachment handling beyond the current document flow
-- investigate a cleaner release path for testers
+- 在技术上能做的范围内，尽量降低 rooted device 的使用摩擦
+- 抽离可复用的 Android / Termux bridge 组件
+- 把附件处理能力从当前文档流程继续往外扩
+- 探索更顺手的测试版发布路径

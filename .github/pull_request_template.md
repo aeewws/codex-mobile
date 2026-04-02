@@ -1,16 +1,17 @@
-## Summary
+## 变更摘要
 
-- explain what changed
-- explain why it matters
+- 这次改了什么
+- 为什么值得改
 
-## Testing
+## 测试
 
 - [ ] `./gradlew testLegacyDebugUnitTest testOssDebugUnitTest`
 - [ ] `./gradlew assembleLegacyDebug`
 - [ ] `./gradlew assembleOssDebug`
-- [ ] manual device check when relevant
+- [ ] 涉及真机行为时，补充手动验证
 
-## Notes
+## 备注
 
-- screenshots attached for UI changes
-- setup docs updated if runtime expectations changed
+- UI 改动请尽量附截图
+- 如果运行时假设变了，请同步更新 `docs/setup.md`
+- 如果你更习惯英文，也可以直接用英文补充说明

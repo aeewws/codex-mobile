@@ -1,51 +1,53 @@
-# Codex Mobile Setup Notes
+# Codex Mobile 环境与安装说明
 
-Codex Mobile is currently designed for a rooted Android workflow with a local Termux-based Codex runtime.
+这份文档是中文优先入口。英文版请看 [setup.en.md](./setup.en.md)。
 
-## What You Need
+Codex Mobile 当前面向 rooted Android + 本地 Termux Codex 运行时这一类使用方式。
 
-- Android Studio and the Android SDK
-- an Android 9+ device
-- Termux installed on-device
-- a working Codex CLI package inside Termux
-- local authentication already completed in Termux
-- root access if you want the current backend lifecycle flow to work as designed
+## 你需要准备什么
 
-## Project Reality
+- Android Studio 和 Android SDK
+- 一台 Android 9+ 设备
+- 手机上安装好的 Termux
+- Termux 里能正常工作的 Codex CLI 包
+- 已经在 Termux 内完成本地登录
+- 如果你想走当前这套后端生命周期方案，还需要 root 权限
 
-This repository contains the Android app project. It does not contain:
+## 这个仓库不包含什么
 
-- your Termux auth state
-- your local Codex session history
-- your proxy setup
-- a full exported phone environment
+这个仓库公开的是 Android App 工程本身，不包含：
 
-## High-Level Bring-Up
+- 你的 Termux 登录态
+- 你的本地 Codex 会话历史
+- 你的代理配置
+- 一整套完整导出的手机运行环境
 
-1. Clone the repository and open it in Android Studio.
-2. Sync the Gradle project and install the required Android SDK components.
-3. Prepare your device-side Termux environment.
-4. Make sure Codex can run inside Termux before testing the Android app.
-5. Build and install the app with Android Studio, `./gradlew assembleLegacyDebug`, or `./gradlew assembleOssDebug`.
-6. Launch the app, then verify backend detection, reconnect behavior, and thread loading.
+## 高层启动流程
 
-## Termux Runtime Notes
+1. 克隆仓库并用 Android Studio 打开。
+2. 同步 Gradle，并安装缺失的 Android SDK 组件。
+3. 先把手机侧的 Termux 运行环境准备好。
+4. 先确认 Codex 能在 Termux 内独立正常运行，再测试 Android App。
+5. 用 Android Studio、`./gradlew assembleLegacyDebug` 或 `./gradlew assembleOssDebug` 构建并安装应用。
+6. 打开 App，重点验证后端发现、重连行为和线程加载是否正常。
 
-The repository includes [`tools/termux-codex-update.sh`](../tools/termux-codex-update.sh) as a helper for updating the community Termux Codex package and restarting the local app-server when needed.
+## Termux 运行时说明
 
-The app expects a local websocket endpoint on `ws://127.0.0.1:8765`.
+仓库里带了一个辅助脚本 [`tools/termux-codex-update.sh`](../tools/termux-codex-update.sh)，用来更新社区版 Termux Codex 包，并在需要时重启本地 app-server。
 
-## Current Constraints
+当前 App 预期本地 websocket 端点是 `ws://127.0.0.1:8765`。
 
-- rooted Android is part of the current product design
-- backend behavior depends on the installed Codex package version inside Termux
-- setup still includes device-specific decisions around power management, root tooling, and proxy configuration
-- UI localization is still Chinese-first
+## 当前约束
 
-## Troubleshooting Checklist
+- rooted Android 仍然是当前产品设计的一部分
+- 后端行为会受到 Termux 内 Codex 包版本影响
+- 实际部署仍然包含电源管理、root 工具链、代理等设备侧决策
+- App 界面与仓库说明目前都以中文优先
 
-- confirm Termux is installed and launchable
-- confirm root is available to the app when testing keepalive features
-- confirm Codex auth exists inside Termux
-- confirm the local app-server can listen on port `8765`
-- capture screenshots or logs before opening an issue
+## 排查清单
+
+- 确认 Termux 已安装并且能正常启动
+- 确认测试保活能力时，App 能拿到 root
+- 确认 Termux 里已经有 Codex 登录态
+- 确认本地 app-server 能监听 `8765`
+- 提 issue 之前尽量先准备截图或日志

@@ -1,66 +1,70 @@
-name: Bug report
-description: Report a reproducible issue in Codex Mobile.
-title: "[Bug]: "
+name: 问题反馈
+description: 反馈一个可以复现的 Codex Mobile 问题。
+title: "[问题反馈]："
 labels:
   - bug
 body:
+  - type: markdown
+    attributes:
+      value: |
+        仓库目前以中文优先展示。若你更习惯英文，也可以直接用英文填写下面内容。
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What happened?
-      placeholder: A short description of the issue.
+      label: 问题概述
+      description: 发生了什么？
+      placeholder: 用几句话说明这个问题。
     validations:
       required: true
   - type: input
     id: android_version
     attributes:
-      label: Android version
-      placeholder: "Example: Android 14"
+      label: Android 版本
+      placeholder: "例如：Android 14"
     validations:
       required: true
   - type: input
     id: device_model
     attributes:
-      label: Device model
-      placeholder: "Example: Pixel 8"
+      label: 设备型号
+      placeholder: "例如：Pixel 8"
     validations:
       required: true
   - type: input
     id: root_stack
     attributes:
-      label: Root stack
-      description: If relevant, note Magisk, KernelSU, or another setup.
-      placeholder: "Example: Magisk 29.0"
+      label: Root 方案
+      description: 如果相关，请说明 Magisk、KernelSU 或其他方案。
+      placeholder: "例如：Magisk 29.0"
   - type: input
     id: termux_version
     attributes:
-      label: Termux version
-      placeholder: "Example: 0.118.3"
+      label: Termux 版本
+      placeholder: "例如：0.118.3"
   - type: input
     id: codex_package_version
     attributes:
-      label: Codex package version inside Termux
-      placeholder: "Example: @mmmbuto/codex-cli-termux@latest"
+      label: Termux 内的 Codex 包版本
+      placeholder: "例如：@mmmbuto/codex-cli-termux@latest"
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
+      label: 复现步骤
       placeholder: |
-        1. Open the app
-        2. Connect to the backend
+        1. 打开 App
+        2. 连接后端
         3. ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
-      placeholder: What did you expect to happen?
+      label: 预期行为
+      placeholder: 你原本希望发生什么？
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Logs or screenshots
-      description: Paste useful logs or attach screenshots if you have them.
+      label: 日志或截图
+      description: 如果方便，请贴出有帮助的日志，或者附上截图。
