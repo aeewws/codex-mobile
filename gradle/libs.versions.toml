@@ -9,7 +9,7 @@ lifecycleRuntimeCompose = "2.9.4"
 lifecycleViewmodelKtx = "2.9.4"
 activityCompose = "1.8.0"
 kotlin = "2.0.21"
-composeBom = "2024.09.00"
+composeBom = "2026.03.00"
 okhttp = "4.12.0"
 
 [libraries]
