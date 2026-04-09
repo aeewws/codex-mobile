@@ -21,8 +21,9 @@ Recommended baseline:
 Useful commands:
 
 ```bash
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
+./gradlew testLegacyDebugUnitTest testOssDebugUnitTest
+./gradlew assembleLegacyDebug
+./gradlew assembleOssDebug
 ```
 
 ## Issues And Proposals
