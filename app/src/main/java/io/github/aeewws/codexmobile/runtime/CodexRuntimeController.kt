@@ -465,7 +465,7 @@ class CodexRuntimeController(private val context: Context) {
     }
 
     private fun buildBootstrapScript(): String = """
-        TERMUX_HOME=""; for candidate in "$LEGACY_TERMUX_HOME" "$ALT_TERMUX_HOME"; do if [ -d "${'$'}candidate" ]; then TERMUX_HOME="${'$'}candidate"; break; fi; done; TERMUX_PREFIX=""; for candidate in "$LEGACY_TERMUX_PREFIX" "$ALT_TERMUX_PREFIX"; do if [ -d "${'$'}candidate" ]; then TERMUX_PREFIX="${'$'}candidate"; break; fi; done; if [ -z "${'$'}TERMUX_HOME" ] || [ -z "${'$'}TERMUX_PREFIX" ]; then echo "termux paths not found" >&2; exit 1; fi; PREFIX="${'$'}TERMUX_PREFIX"; HOME="${'$'}TERMUX_HOME"; export PREFIX HOME TMPDIR="${'$'}TERMUX_PREFIX/tmp"; export PATH="${'$'}TERMUX_PREFIX/bin:/system/bin:/system/xbin"; export CODEX_MANAGED_BY_NPM=1; APP_SERVER_BIN="${'$'}TERMUX_PREFIX/bin/codex"; [ -f "${'$'}TERMUX_HOME/.codex-termux-proxy.sh" ] && . "${'$'}TERMUX_HOME/.codex-termux-proxy.sh"; if ss -ltn 2>/dev/null | grep -q '127.0.0.1:$PORT'; then exit 0; fi; if [ ! -x "${'$'}APP_SERVER_BIN" ]; then echo "codex binary not found: ${'$'}APP_SERVER_BIN" >&2; exit 1; fi; nohup "${'$'}APP_SERVER_BIN" app-server --listen ws://127.0.0.1:$PORT >/dev/null 2>&1 &
+        TERMUX_HOME=""; for candidate in "$LEGACY_TERMUX_HOME" "$ALT_TERMUX_HOME"; do if [ -d "${'$'}candidate" ]; then TERMUX_HOME="${'$'}candidate"; break; fi; done; TERMUX_PREFIX=""; for candidate in "$LEGACY_TERMUX_PREFIX" "$ALT_TERMUX_PREFIX"; do if [ -d "${'$'}candidate" ]; then TERMUX_PREFIX="${'$'}candidate"; break; fi; done; if [ -z "${'$'}TERMUX_HOME" ] || [ -z "${'$'}TERMUX_PREFIX" ]; then echo "termux paths not found" >&2; exit 1; fi; PREFIX="${'$'}TERMUX_PREFIX"; HOME="${'$'}TERMUX_HOME"; export PREFIX HOME TMPDIR="${'$'}TERMUX_PREFIX/tmp"; export PATH="${'$'}TERMUX_PREFIX/bin:/system/bin:/system/xbin"; export CODEX_MANAGED_BY_NPM=1; APP_SERVER_BIN="${'$'}TERMUX_PREFIX/bin/codex"; APP_SERVER_LOG="${'$'}TERMUX_HOME/.codex-app-server.log"; [ -f "${'$'}TERMUX_HOME/.codex-termux-proxy.sh" ] && . "${'$'}TERMUX_HOME/.codex-termux-proxy.sh"; if ss -ltn 2>/dev/null | grep -q '127.0.0.1:$PORT'; then exit 0; fi; if [ ! -x "${'$'}APP_SERVER_BIN" ]; then echo "codex binary not found: ${'$'}APP_SERVER_BIN" >&2; exit 1; fi; rm -f "${'$'}APP_SERVER_LOG" >/dev/null 2>&1 || true; nohup "${'$'}APP_SERVER_BIN" app-server --listen ws://127.0.0.1:$PORT >"${'$'}APP_SERVER_LOG" 2>&1 &
     """.trimIndent()
 
     private fun buildStopScript(): String = """
@@ -499,7 +499,14 @@ class CodexRuntimeController(private val context: Context) {
 
     private suspend fun readBackendLogTail(): String {
         val result = RootShell.run(
-            command = "tail -n 60 ${appServerLogPath()} 2>/dev/null",
+            command = """
+                for home in "$LEGACY_TERMUX_HOME" "$ALT_TERMUX_HOME"; do
+                  if [ -f "${'$'}home/.codex-app-server.log" ]; then
+                    tail -n 60 "${'$'}home/.codex-app-server.log"
+                    exit 0
+                  fi
+                done
+            """.trimIndent(),
             timeoutMillis = 4_000L,
         )
         return result.stdout.trim()
@@ -508,8 +515,6 @@ class CodexRuntimeController(private val context: Context) {
     private fun termuxHomePath(): String = LEGACY_TERMUX_HOME
 
     private fun termuxPrefixPath(): String = LEGACY_TERMUX_PREFIX
-
-    private fun appServerLogPath(): String = "${termuxHomePath()}/.codex-app-server.log"
 
     companion object {
         private const val TAG = "CodexRuntime"

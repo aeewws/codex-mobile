@@ -127,7 +127,7 @@ Not included here:
 
 - backend behavior depends on the installed Codex package version inside Termux
 - Android- and root-specific setup is still part of the runtime story
-- image input has been validated at the backend layer but is not yet exposed in the main UI
+- image input and document attachments are available in the main UI, with camera, gallery, and file picker entry points
 - reconnect and long-thread stability are still being hardened
 
 ## Open Source Direction
