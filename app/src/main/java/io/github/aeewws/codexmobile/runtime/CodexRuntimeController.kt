@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import androidx.core.content.edit
 import androidx.core.content.ContextCompat
 import io.github.aeewws.codexmobile.service.BackendForegroundService
 import kotlinx.coroutines.delay
@@ -236,7 +237,7 @@ class CodexRuntimeController(private val context: Context) {
         actions.put(runAction("restrictBackground", "cmd netpolicy add restrict-background-whitelist $uid"))
         actions.put(runAction("standbyBucket", "am set-standby-bucket $TERMUX_PACKAGE active"))
 
-        prefs.edit().putBoolean(PREF_AUTO_HARDENING, true).apply()
+        prefs.edit { putBoolean(PREF_AUTO_HARDENING, true) }
         return getKeepaliveStatus().put("actions", actions)
     }
 
@@ -259,7 +260,7 @@ class CodexRuntimeController(private val context: Context) {
         .put("autoHardeningEnabled", isAutoHardeningEnabled())
 
     fun setAutoHardeningEnabled(enabled: Boolean): JSONObject {
-        prefs.edit().putBoolean(PREF_AUTO_HARDENING, enabled).apply()
+        prefs.edit { putBoolean(PREF_AUTO_HARDENING, enabled) }
         return getAppPreferences()
     }
 
