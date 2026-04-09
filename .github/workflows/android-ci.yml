@@ -17,6 +17,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CODEX_MOBILE_KEYSTORE_B64: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 }}
+      CODEX_MOBILE_KEYSTORE_PASSWORD: ${{ secrets.CODEX_MOBILE_KEYSTORE_PASSWORD }}
+      CODEX_MOBILE_KEY_ALIAS: ${{ secrets.CODEX_MOBILE_KEY_ALIAS }}
+      CODEX_MOBILE_KEY_PASSWORD: ${{ secrets.CODEX_MOBILE_KEY_PASSWORD }}
 
     steps:
       - name: Check out repository
@@ -36,13 +41,8 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Prepare shared signing keystore
-        if: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 != '' && secrets.CODEX_MOBILE_KEYSTORE_PASSWORD != '' && secrets.CODEX_MOBILE_KEY_ALIAS != '' && secrets.CODEX_MOBILE_KEY_PASSWORD != '' }}
+        if: ${{ env.CODEX_MOBILE_KEYSTORE_B64 != '' && env.CODEX_MOBILE_KEYSTORE_PASSWORD != '' && env.CODEX_MOBILE_KEY_ALIAS != '' && env.CODEX_MOBILE_KEY_PASSWORD != '' }}
         shell: bash
-        env:
-          CODEX_MOBILE_KEYSTORE_B64: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 }}
-          CODEX_MOBILE_KEYSTORE_PASSWORD: ${{ secrets.CODEX_MOBILE_KEYSTORE_PASSWORD }}
-          CODEX_MOBILE_KEY_ALIAS: ${{ secrets.CODEX_MOBILE_KEY_ALIAS }}
-          CODEX_MOBILE_KEY_PASSWORD: ${{ secrets.CODEX_MOBILE_KEY_PASSWORD }}
         run: |
           keystore_path="$GITHUB_WORKSPACE/signing/phone-compat.keystore"
           mkdir -p "$(dirname "$keystore_path")"
