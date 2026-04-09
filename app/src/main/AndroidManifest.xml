@@ -32,7 +32,6 @@
         <activity
             android:name="io.github.aeewws.codexmobile.MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.CodexMobile">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
