@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.edit
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import io.github.aeewws.codexmobile.service.BackendForegroundService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -293,7 +294,7 @@ class CodexRuntimeController(private val context: Context) {
         return try {
             val intent = Intent(
                 Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                Uri.parse("package:${context.packageName}"),
+                "package:${context.packageName}".toUri(),
             )
             activity.startActivity(intent)
             true
