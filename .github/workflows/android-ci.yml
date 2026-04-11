@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -19,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CODEX_MOBILE_KEYSTORE_B64: ${{ secrets.CODEX_MOBILE_KEYSTORE_B64 }}
-      CODEX_MOBILE_KEYSTORE_PATH: ${{ github.workspace }}/signing/phone-compat.keystore
       CODEX_MOBILE_KEYSTORE_PASSWORD: ${{ secrets.CODEX_MOBILE_KEYSTORE_PASSWORD }}
       CODEX_MOBILE_KEY_ALIAS: ${{ secrets.CODEX_MOBILE_KEY_ALIAS }}
       CODEX_MOBILE_KEY_PASSWORD: ${{ secrets.CODEX_MOBILE_KEY_PASSWORD }}
@@ -42,11 +44,27 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Prepare shared signing keystore
-        if: ${{ env.CODEX_MOBILE_KEYSTORE_B64 != '' }}
+        if: ${{ env.CODEX_MOBILE_KEYSTORE_B64 != '' && env.CODEX_MOBILE_KEYSTORE_PASSWORD != '' && env.CODEX_MOBILE_KEY_ALIAS != '' && env.CODEX_MOBILE_KEY_PASSWORD != '' }}
         shell: bash
         run: |
-          mkdir -p "$(dirname "$CODEX_MOBILE_KEYSTORE_PATH")"
-          echo "$CODEX_MOBILE_KEYSTORE_B64" | base64 -d > "$CODEX_MOBILE_KEYSTORE_PATH"
+          keystore_path="$GITHUB_WORKSPACE/signing/phone-compat.keystore"
+          mkdir -p "$(dirname "$keystore_path")"
+          printf '%s' "$CODEX_MOBILE_KEYSTORE_B64" | base64 -d > "$keystore_path"
+          {
+            echo "CODEX_MOBILE_KEYSTORE_PATH=$keystore_path"
+            echo "CODEX_MOBILE_KEYSTORE_PASSWORD=$CODEX_MOBILE_KEYSTORE_PASSWORD"
+            echo "CODEX_MOBILE_KEY_ALIAS=$CODEX_MOBILE_KEY_ALIAS"
+            echo "CODEX_MOBILE_KEY_PASSWORD=$CODEX_MOBILE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Report signing mode
+        shell: bash
+        run: |
+          if [ -n "${CODEX_MOBILE_KEYSTORE_PATH:-}" ] && [ -f "${CODEX_MOBILE_KEYSTORE_PATH:-}" ]; then
+            echo "Shared signing keystore is available."
+          else
+            echo "Shared signing secrets are unavailable; using default debug signing."
+          fi
 
       - name: Run unit tests
         run: ./gradlew --no-daemon testLegacyDebugUnitTest testOssDebugUnitTest

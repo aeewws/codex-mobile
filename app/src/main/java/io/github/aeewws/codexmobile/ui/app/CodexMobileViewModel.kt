@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.core.graphics.scale
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.aeewws.codexmobile.runtime.CodexRuntimeController
@@ -1940,8 +1941,7 @@ class CodexMobileViewModel(
             return bitmap
         }
         val ratio = maxEdge.toFloat() / maxSide.toFloat()
-        return Bitmap.createScaledBitmap(
-            bitmap,
+        return bitmap.scale(
             (width * ratio).toInt().coerceAtLeast(1),
             (height * ratio).toInt().coerceAtLeast(1),
             true,

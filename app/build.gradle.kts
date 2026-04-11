@@ -15,7 +15,8 @@ val sharedSigningKeystorePath = stringPropertyOrEnv(
     envName = "CODEX_MOBILE_KEYSTORE_PATH",
     fallback = localDebugKeystore.takeIf { it.exists() }?.absolutePath,
 )
-val sharedSigningEnabled = !sharedSigningKeystorePath.isNullOrBlank()
+val sharedSigningKeystoreFile = sharedSigningKeystorePath?.let(::file)
+val sharedSigningEnabled = sharedSigningKeystoreFile?.exists() == true
 val sharedSigningStorePassword = stringPropertyOrEnv(
     propertyName = "codexMobile.keystore.password",
     envName = "CODEX_MOBILE_KEYSTORE_PASSWORD",
@@ -65,7 +66,7 @@ android {
     if (sharedSigningEnabled) {
         signingConfigs {
             create("sharedCompat") {
-                storeFile = file(sharedSigningKeystorePath!!)
+                storeFile = sharedSigningKeystoreFile!!
                 storePassword = sharedSigningStorePassword
                 keyAlias = sharedSigningKeyAlias
                 keyPassword = sharedSigningKeyPassword
